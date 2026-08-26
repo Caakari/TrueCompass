@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>TrueCompass — App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0F1A; --panel:#0F1524; --card:#161F33; --card-alt:#1C2740; --line:#26314A;
+    --text:#F3F1E7; --text-dim:#8A93AC; --text-faint:#5C687F;
+    --green:#2FBD73; --green-dim:#123B27; --green-text:#7BE3A9; --green-on:#06210F;
+    --red:#E8586A; --red-dim:#3D1820; --red-text:#F19AA5;
+    --map-bg:#101932; --map-road:#26314A;
+    --shadow:0 30px 70px -24px rgba(0,0,0,0.65);
+  }
+  [data-theme="light"]{
+    --bg:#F3F5F0; --panel:#FFFFFF; --card:#FFFFFF; --card-alt:#EEF1EA; --line:#DDE2D8;
+    --text:#141A12; --text-dim:#5B6459; --text-faint:#8A9285;
+    --green:#1E9E5D; --green-dim:#DFF3E7; --green-text:#136B3E; --green-on:#F4FBF6;
+    --red:#C8384D; --red-dim:#FBE3E6; --red-text:#8E1D2C;
+    --map-bg:#E7EBE1; --map-road:#CBD2C4;
+    --shadow:0 24px 50px -24px rgba(20,26,18,0.2);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); font-family:'Inter', sans-serif; color:var(--text); min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:40px 20px;
+    transition:background .3s ease, color .3s ease;
+  }
+  .stage{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .theme-toggle{
+    display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:20px;
+    background:var(--card); border:1px solid var(--line); font-size:12px; color:var(--text-dim); cursor:pointer;
+  }
+  .switch{ width:30px; height:17px; border-radius:20px; background:var(--line); position:relative; transition:background .25s ease; }
+  .switch::after{ content:''; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:var(--text); transition:transform .25s ease; }
+  [data-theme="light"] .switch{ background:var(--green-dim); }
+  [data-theme="light"] .switch::after{ transform:translateX(13px); background:var(--green); }
+
+  /* ---------- phone ---------- */
+  .phone{ width:370px; height:760px; background:#05070C; border-radius:48px; padding:14px; position:relative; box-shadow:0 0 0 2px var(--line), var(--shadow); }
+  .notch{ position:absolute; top:14px; left:50%; transform:translateX(-50%); width:120px; height:22px; background:#05070C; border-radius:0 0 16px 16px; z-index:8; }
+  .screen{ width:100%; height:100%; background:var(--panel); border-radius:36px; overflow:hidden; position:relative; }
+  .view{ position:absolute; inset:0; opacity:0; transform:translateY(14px); pointer-events:none; transition:opacity .4s ease, transform .4s ease; display:flex; flex-direction:column; }
+  .view.active{ opacity:1; transform:translateY(0); pointer-events:auto; }
+
+  .topbar{ display:flex; align-items:center; gap:10px; padding:16px 20px 4px; position:relative; z-index:5; }
+  .back-btn{
+    width:30px; height:30px; border-radius:50%; background:var(--card-alt); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; font-size:15px;
+  }
+  .back-btn:hover{ border-color:var(--green); }
+  .compass-mark{ width:20px; height:20px; border-radius:50%; border:2px solid var(--line); position:relative; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--card-alt); }
+  .compass-mark .needle{ width:2.5px; height:11px; border-radius:3px; position:relative; overflow:hidden; transform:rotate(28deg); }
+  .compass-mark .needle::before{ content:''; position:absolute; top:0; left:0; width:100%; height:50%; background:var(--red); }
+  .compass-mark .needle::after{ content:''; position:absolute; bottom:0; left:0; width:100%; height:50%; background:var(--green); }
+  .brand-name{ font-family:'Space Grotesk', sans-serif; font-size:13.5px; font-weight:700; }
+  h1.title{ font-family:'Space Grotesk', sans-serif; font-size:19px; font-weight:700; margin:8px 22px 2px; }
+  p.sub{ font-size:12.5px; color:var(--text-dim); margin:0 22px 14px; line-height:1.5; }
+
+  /* ===== city map background (shared) ===== */
+  .city-map{ position:absolute; inset:0; background:var(--map-bg); overflow:hidden; }
+  .city-map svg{ position:absolute; inset:0; width:100%; height:100%; }
+  .road{ stroke:var(--map-road); stroke-width:10; fill:none; }
+  .road.thin{ stroke-width:5; opacity:.7; }
+  .block{ fill:var(--card-alt); opacity:.5; }
+
+  /* ===== SCREEN 1: home map ===== */
+  .home-map-wrap{ position:relative; flex:1; }
+  .me-dot{ position:absolute; width:16px; height:16px; border-radius:50%; background:var(--green); top:52%; left:44%; box-shadow:0 0 0 0 rgba(47,189,115,.6); animation:pulseMe 2s ease-out infinite; }
+  @keyframes pulseMe{ 0%{ box-shadow:0 0 0 0 rgba(47,189,115,.55);} 70%{ box-shadow:0 0 0 24px rgba(47,189,115,0);} 100%{ box-shadow:0 0 0 0 rgba(47,189,115,0);} }
+  .top-fade{ position:absolute; top:0; left:0; right:0; height:90px; background:linear-gradient(var(--panel), transparent); z-index:2; }
+  .bottom-sheet{
+    position:relative; z-index:3; margin-top:auto;
+    background:var(--panel); border-top:1px solid var(--line);
+    border-radius:26px 26px 0 0; padding:20px 22px 26px;
+    box-shadow:0 -20px 40px -20px rgba(0,0,0,.4);
+  }
+  .sheet-handle{ width:36px; height:4px; border-radius:4px; background:var(--line); margin:0 auto 14px; }
+  .search-cta{
+    display:flex; align-items:center; gap:10px;
+    background:var(--card-alt); border:1px solid var(--line); border-radius:14px; padding:14px 16px;
+    cursor:pointer; transition:border-color .2s ease;
+  }
+  .search-cta:hover{ border-color:var(--green); }
+  .search-cta .ic{ width:18px; height:18px; border-radius:50%; background:var(--green-dim); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--green-text); flex-shrink:0; }
+  .search-cta span{ font-size:13.5px; color:var(--text-dim); }
+  .quick-row{ display:flex; gap:10px; margin-top:14px; }
+  .quick-chip{ flex:1; background:var(--card-alt); border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; font-size:11.5px; color:var(--text-dim); }
+  .quick-chip b{ display:block; font-size:12.5px; color:var(--text); font-weight:600; margin-top:2px; }
+
+  /* ===== SCREEN 2: endereco ===== */
+  .addr-field{ margin:0 22px 10px; background:var(--card-alt); border:1.5px solid var(--line); border-radius:13px; padding:12px 14px; display:flex; align-items:center; gap:10px; transition:border-color .2s ease; }
+  .addr-field.focused{ border-color:var(--green); }
+  .addr-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .addr-dot.g{ background:var(--green); } .addr-dot.r{ background:var(--red); }
+  .addr-line-connector{ width:1.5px; height:16px; background:var(--line); margin-left:31px; margin-top:-6px; margin-bottom:-6px; }
+  .addr-text{ font-size:13.5px; } .addr-text.ph{ color:var(--text-faint); }
+  .cursor-blink{ display:inline-block; width:1.5px; height:14px; background:var(--green); margin-left:2px; animation:blink 1s step-end infinite; vertical-align:middle; }
+  @keyframes blink{ 50%{ opacity:0; } }
+  .suggest-title{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; margin:14px 22px 8px; }
+  .suggest-list{ padding:0 14px; overflow:hidden; flex:1; }
+  .suggest-row{ display:flex; align-items:center; gap:12px; padding:11px 8px; border-radius:12px; cursor:pointer; opacity:0; transform:translateY(8px); animation:suggestIn .4s ease forwards; transition:background .15s ease; }
+  .suggest-row:hover{ background:var(--card-alt); }
+  @keyframes suggestIn{ to{ opacity:1; transform:translateY(0); } }
+  .suggest-icon{ width:32px; height:32px; border-radius:10px; background:var(--card-alt); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .suggest-name{ font-size:13px; font-weight:600; }
+  .suggest-addr{ font-size:11px; color:var(--text-faint); margin-top:1px; }
+
+  /* ===== SCREEN 3: escolha do valor ===== */
+  .fare-list{ padding:2px 18px; display:flex; flex-direction:column; gap:10px; flex:1; overflow:hidden; }
+  .fare-card{ display:flex; align-items:center; gap:13px; background:var(--card-alt); border:1.5px solid var(--line); border-radius:16px; padding:13px 14px; cursor:pointer; transition:border-color .2s ease, background .2s ease; opacity:0; transform:translateY(10px); animation:fareIn .4s ease forwards; }
+  @keyframes fareIn{ to{ opacity:1; transform:translateY(0); } }
+  .fare-card.selected{ border-color:var(--green); background:var(--green-dim); }
+  .fare-icon{ width:44px; height:44px; border-radius:12px; background:var(--card); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .fare-card.selected .fare-icon{ background:var(--panel); }
+  .fare-mid{ flex:1; }
+  .fare-name{ font-size:13.5px; font-weight:700; }
+  .fare-desc{ font-size:11px; color:var(--text-faint); margin-top:1px; }
+  .fare-eta{ font-size:10.5px; color:var(--text-dim); margin-top:3px; }
+  .fare-price{ font-family:'IBM Plex Mono', monospace; font-size:15px; font-weight:500; text-align:right; }
+  .fare-radio{ width:18px; height:18px; border-radius:50%; border:2px solid var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .fare-card.selected .fare-radio{ border-color:var(--green); }
+  .fare-radio .rdot{ width:9px; height:9px; border-radius:50%; background:var(--green); opacity:0; transform:scale(0); transition:all .2s ease; }
+  .fare-card.selected .fare-radio .rdot{ opacity:1; transform:scale(1); }
+  .bottom-bar{ margin:10px 22px 22px; }
+  .primary-btn{ background:var(--green); color:var(--green-on); text-align:center; padding:15px; border-radius:15px; font-weight:700; font-size:14.5px; cursor:pointer; position:relative; overflow:hidden; }
+  .ripple{ position:absolute; border-radius:50%; background:rgba(255,255,255,.5); transform:scale(0); animation:rippleAnim .6s ease-out forwards; pointer-events:none; }
+  @keyframes rippleAnim{ to{ transform:scale(18); opacity:0; } }
+
+  /* ===== SCREEN 4: pagamento ===== */
+  .trip-summary{ margin:0 22px 16px; background:var(--card-alt); border:1px solid var(--line); border-radius:15px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; }
+  .trip-summary .cat{ font-size:13.5px; font-weight:700; }
+  .trip-summary .meta{ font-size:11px; color:var(--text-faint); margin-top:2px; }
+  .trip-summary .price{ font-family:'IBM Plex Mono', monospace; font-size:18px; color:var(--green-text); }
+  .pay-title{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; margin:0 22px 8px; }
+  .pay-list{ padding:0 18px; display:flex; flex-direction:column; gap:9px; flex:1; }
+  .pay-row{ display:flex; align-items:center; gap:12px; background:var(--card-alt); border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; cursor:pointer; transition:border-color .2s ease, background .2s ease; }
+  .pay-row.selected{ border-color:var(--green); background:var(--green-dim); }
+  .pay-icon{ width:36px; height:36px; border-radius:10px; background:var(--card); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .pay-row.selected .pay-icon{ background:var(--panel); }
+  .pay-name{ font-size:13px; font-weight:600; flex:1; }
+  .pay-detail{ font-size:11px; color:var(--text-faint); }
+  .pay-radio{ width:17px; height:17px; border-radius:50%; border:2px solid var(--line); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .pay-row.selected .pay-radio{ border-color:var(--green); }
+  .pay-radio .rdot{ width:8px; height:8px; border-radius:50%; background:var(--green); opacity:0; transform:scale(0); transition:all .2s ease; }
+  .pay-row.selected .pay-radio .rdot{ opacity:1; transform:scale(1); }
+
+  /* ===== SCREEN 5: buscando motorista (varios carros) ===== */
+  .search-map-wrap{ position:relative; flex:1; overflow:hidden; display:flex; flex-direction:column; }
+  .pin{ position:absolute; width:14px; height:14px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); z-index:3; }
+  .pin.o{ background:var(--green); top:58%; left:30%; box-shadow:0 0 10px rgba(47,189,115,.6); }
+  .search-car{
+    position:absolute; font-size:18px; line-height:1;
+    opacity:0; z-index:3; animation:carAppear .5s ease forwards, carDrift 3s ease-in-out infinite;
+    filter:grayscale(1) brightness(1.5);
+  }
+  @keyframes carAppear{ to{ opacity:.8; } }
+  @keyframes carDrift{ 0%,100%{ transform:translate(0,0) rotate(0deg); } 50%{ transform:translate(4px,-3px) rotate(-4deg); } }
+  .search-car.chosen{
+    filter:none !important; opacity:1 !important; font-size:22px;
+    animation:carAppear .5s ease forwards, chosenPulse 1s ease-in-out infinite;
+    z-index:5;
+  }
+  @keyframes chosenPulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.15);} }
+  .search-car.fading{ transition:opacity .5s ease; opacity:0 !important; }
+  .scan-ring{ position:absolute; top:50%; left:50%; width:40px; height:40px; margin:-20px 0 0 -20px; border-radius:50%; border:1.5px solid var(--green); opacity:0; z-index:2; animation:ringExpand 2.4s ease-out infinite; }
+  .scan-ring.r2{ animation-delay:.8s; } .scan-ring.r3{ animation-delay:1.6s; }
+  @keyframes ringExpand{ 0%{ width:20px; height:20px; margin:-10px 0 0 -10px; opacity:.6; } 100%{ width:220px; height:220px; margin:-110px 0 0 -110px; opacity:0; } }
+  .search-banner{ position:relative; z-index:4; margin-top:auto; background:var(--panel); border-top:1px solid var(--line); border-radius:24px 24px 0 0; padding:18px 22px 24px; text-align:center; }
+  .search-banner .l1{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:14.5px; }
+  .search-banner .l2{ font-size:11.5px; color:var(--text-dim); margin-top:4px; }
+  .dotting::after{ content:''; animation:dots 1.4s steps(4,end) infinite; }
+  @keyframes dots{ 0%{content:'';}25%{content:'.';}50%{content:'..';}75%{content:'...';}100%{content:'';} }
+  .skeleton{ height:8px; border-radius:6px; background:linear-gradient(90deg, var(--card-alt) 25%, var(--line) 37%, var(--card-alt) 63%); background-size:400% 100%; animation:shimmer 1.6s ease-in-out infinite; margin:10px auto 0; width:55%; }
+  @keyframes shimmer{ 0%{background-position:100% 50%;} 100%{background-position:0 50%;} }
+
+  /* ===== SCREEN 6: em andamento (uber-like) ===== */
+  .ride-map-wrap{ position:relative; flex:1; overflow:hidden; }
+  .status-pill{ position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:7px 16px; font-size:11.5px; font-weight:600; display:flex; align-items:center; gap:7px; box-shadow:0 8px 20px -8px rgba(0,0,0,.4); }
+  .status-pill .bd{ width:6px; height:6px; border-radius:50%; background:var(--red); animation:pulseDot2 1.2s ease-in-out infinite; }
+  @keyframes pulseDot2{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+  .ride-route-path{ fill:none; stroke:var(--green); stroke-width:4; stroke-linecap:round; filter:drop-shadow(0 0 6px rgba(47,189,115,0.55)); }
+  .ride-car{ position:absolute; width:16px; height:16px; border-radius:5px; background:var(--red); box-shadow:0 0 12px rgba(232,88,106,.8); z-index:4; offset-rotate:0deg; animation:driveAlong 6s linear infinite; }
+  @keyframes driveAlong{ 0%{ offset-distance:0%; } 100%{ offset-distance:100%; } }
+  .ride-pin{ position:absolute; width:14px; height:14px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); background:var(--green); box-shadow:0 0 10px rgba(47,189,115,.6); z-index:3; top:20%; left:72%; }
+  .ride-sheet{ position:relative; z-index:5; margin-top:auto; background:var(--panel); border-top:1px solid var(--line); border-radius:26px 26px 0 0; padding:18px 22px 22px; box-shadow:0 -20px 40px -20px rgba(0,0,0,.4); }
+  .eta-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .eta-big{ font-family:'IBM Plex Mono', monospace; font-size:34px; font-weight:500; color:var(--green-text); line-height:1; }
+  .eta-caption{ font-size:11px; color:var(--text-faint); margin-top:2px; }
+  .eta-dist{ text-align:right; }
+  .eta-dist .num{ font-size:14px; font-weight:600; }
+  .eta-dist .cap{ font-size:10.5px; color:var(--text-faint); }
+  .driver-row{ display:flex; align-items:center; gap:11px; border-top:1px solid var(--line); padding-top:14px; }
+  .avatar{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg, var(--green), var(--green-dim)); display:flex; align-items:center; justify-content:center; font-weight:700; font-family:'Space Grotesk', sans-serif; font-size:13px; color:var(--green-on); flex-shrink:0; }
+  .driver-info{ flex:1; }
+  .driver-info .name{ font-weight:600; font-size:13px; } .driver-info .car-model{ font-size:11px; color:var(--text-faint); margin-top:1px; }
+  .icon-btn{ width:36px; height:36px; border-radius:50%; background:var(--card-alt); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; }
+
+  /* ===== SCREEN 7: concluida ===== */
+  .success-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .check-circle{ width:78px; height:78px; border-radius:50%; border:3px solid var(--green); display:flex; align-items:center; justify-content:center; margin-bottom:16px; animation:popCircle .5s cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes popCircle{ from{ transform:scale(0); opacity:0;} to{ transform:scale(1); opacity:1;} }
+  .check-circle svg{ width:36px; height:36px; }
+  .check-path{ fill:none; stroke:var(--green); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:40; stroke-dashoffset:40; animation:drawCheck .5s ease forwards .3s; }
+  @keyframes drawCheck{ to{ stroke-dashoffset:0; } }
+  .success-title{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:17.5px; }
+  .success-sub{ font-size:12px; color:var(--text-dim); margin-top:4px; text-align:center; padding:0 28px; }
+  .receipt{ margin-top:18px; width:82%; background:var(--card-alt); border:1px solid var(--line); border-radius:15px; padding:14px 16px; animation:slideUp .5s ease .5s both; }
+  @keyframes slideUp{ from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);} }
+  .receipt-row{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-dim); padding:4px 0; }
+  .receipt-row.total{ color:var(--text); font-weight:700; font-size:14px; border-top:1px dashed var(--line); margin-top:5px; padding-top:9px; }
+  .confetti{ position:absolute; top:-10px; width:6px; height:11px; opacity:0.9; animation:fall linear forwards; }
+  @keyframes fall{ to{ transform:translateY(600px) rotate(400deg); opacity:0; } }
+  .restart-btn{ margin-top:20px; background:var(--card-alt); border:1px solid var(--line); color:var(--text); padding:11px 20px; border-radius:12px; font-size:12.5px; font-weight:600; cursor:pointer; animation:slideUp .5s ease .6s both; }
+  .restart-btn:hover{ border-color:var(--green); }
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="stage">
+  <div class="theme-toggle" id="themeToggle"><span id="themeLabel">Tema escuro</span><div class="switch"></div></div>
+
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+
+      <!-- SCREEN 1: mapa inicial -->
+      <div class="view active" data-view="1">
+        <div class="home-map-wrap">
+          <div class="top-fade"></div>
+          <div class="city-map">
+            <svg viewBox="0 0 370 500" preserveAspectRatio="none">
+              <rect class="block" x="20" y="30" width="90" height="70" rx="6"></rect>
+              <rect class="block" x="140" y="40" width="70" height="90" rx="6"></rect>
+              <rect class="block" x="240" y="20" width="100" height="60" rx="6"></rect>
+              <rect class="block" x="30" y="140" width="110" height="80" rx="6"></rect>
+              <rect class="block" x="180" y="160" width="80" height="70" rx="6"></rect>
+              <rect class="block" x="270" y="150" width="80" height="90" rx="6"></rect>
+              <rect class="block" x="40" y="260" width="90" height="90" rx="6"></rect>
+              <rect class="block" x="160" y="270" width="100" height="70" rx="6"></rect>
+              <path class="road" d="M0,110 H370"></path>
+              <path class="road" d="M0,250 H370"></path>
+              <path class="road" d="M120,0 V500"></path>
+              <path class="road" d="M255,0 V500"></path>
+              <path class="road thin" d="M0,180 H370"></path>
+              <path class="road thin" d="M60,0 V500"></path>
+              <path class="road thin" d="M300,0 V500"></path>
+            </svg>
+          </div>
+          <div class="me-dot"></div>
+          <div class="topbar" style="position:relative;"><div class="compass-mark"><div class="needle"></div></div><div class="brand-name">TrueCompass</div></div>
+        </div>
+        <div class="bottom-sheet">
+          <div class="sheet-handle"></div>
+          <div class="search-cta" id="openSearch"><div class="ic">◎</div><span>Pra onde você vai?</span></div>
+          <div class="quick-row">
+            <div class="quick-chip">Casa<b>8 min</b></div>
+            <div class="quick-chip">Trabalho<b>14 min</b></div>
+            <div class="quick-chip">Faculdade<b>11 min</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: endereco -->
+      <div class="view" data-view="2">
+        <div class="topbar"><div class="back-btn" data-back="1">←</div><div class="brand-name">Para onde vamos?</div></div>
+        <div style="height:6px;"></div>
+        <div class="addr-field">
+          <div class="addr-dot g"></div>
+          <div class="addr-text">Av. Paulista, 1000</div>
+        </div>
+        <div class="addr-line-connector"></div>
+        <div class="addr-field focused">
+          <div class="addr-dot r"></div>
+          <div class="addr-text ph" id="destTyping">Digite o destino<span class="cursor-blink"></span></div>
+        </div>
+        <div class="suggest-title">Sugestões</div>
+        <div class="suggest-list" id="suggestList">
+          <div class="suggest-row" style="animation-delay:.05s" data-addr="Aeroporto de Congonhas">
+            <div class="suggest-icon">✈️</div>
+            <div><div class="suggest-name">Aeroporto de Congonhas</div><div class="suggest-addr">Av. Washington Luís, s/n</div></div>
+          </div>
+          <div class="suggest-row" style="animation-delay:.15s" data-addr="Shopping Ibirapuera">
+            <div class="suggest-icon">🛍️</div>
+            <div><div class="suggest-name">Shopping Ibirapuera</div><div class="suggest-addr">Av. Ibirapuera, 3103</div></div>
+          </div>
+          <div class="suggest-row" style="animation-delay:.25s" data-addr="Faculdade USJT">
+            <div class="suggest-icon">🎓</div>
+            <div><div class="suggest-name">Faculdade USJT</div><div class="suggest-addr">R. Taquari, 546</div></div>
+          </div>
+          <div class="suggest-row" style="animation-delay:.35s" data-addr="Parque Ibirapuera">
+            <div class="suggest-icon">🌳</div>
+            <div><div class="suggest-name">Parque Ibirapuera</div><div class="suggest-addr">Portão 10 · Av. Pedro Álvares Cabral</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 3: escolha do valor -->
+      <div class="view" data-view="3">
+        <div class="topbar"><div class="back-btn" data-back="2">←</div><div class="brand-name">Escolha sua viagem</div></div>
+        <p class="sub" style="margin-top:6px;">3,4 km · chegada em 5–8 min</p>
+        <div class="fare-list">
+          <div class="fare-card" data-fare="start" data-price="14,90" style="animation-delay:.05s">
+            <div class="fare-icon">🚗</div>
+            <div class="fare-mid"><div class="fare-name">Compass Start</div><div class="fare-desc">Econômico · até 4 pessoas</div><div class="fare-eta">Chegada em 6 min</div></div>
+            <div style="text-align:right; display:flex; align-items:center; gap:10px;"><div class="fare-price">R$ 14,90</div><div class="fare-radio"><div class="rdot"></div></div></div>
+          </div>
+          <div class="fare-card selected" data-fare="plus" data-price="19,90" style="animation-delay:.15s">
+            <div class="fare-icon">🚙</div>
+            <div class="fare-mid"><div class="fare-name">Compass Plus</div><div class="fare-desc">Mais espaço · até 4 pessoas</div><div class="fare-eta">Chegada em 5 min</div></div>
+            <div style="text-align:right; display:flex; align-items:center; gap:10px;"><div class="fare-price">R$ 19,90</div><div class="fare-radio"><div class="rdot"></div></div></div>
+          </div>
+          <div class="fare-card" data-fare="black" data-price="29,90" style="animation-delay:.25s">
+            <div class="fare-icon">🚘</div>
+            <div class="fare-mid"><div class="fare-name">Compass Black</div><div class="fare-desc">Premium · motoristas top</div><div class="fare-eta">Chegada em 4 min</div></div>
+            <div style="text-align:right; display:flex; align-items:center; gap:10px;"><div class="fare-price">R$ 29,90</div><div class="fare-radio"><div class="rdot"></div></div></div>
+          </div>
+        </div>
+        <div class="bottom-bar"><div class="primary-btn" id="toPaymentBtn">Ir para pagamento</div></div>
+      </div>
+
+      <!-- SCREEN 4: pagamento -->
+      <div class="view" data-view="4">
+        <div class="topbar"><div class="back-btn" data-back="3">←</div><div class="brand-name">Pagamento</div></div>
+        <div style="height:8px;"></div>
+        <div class="trip-summary">
+          <div><div class="cat" id="paySummaryName">Compass Plus</div><div class="meta">3,4 km · chegada em 5 min</div></div>
+          <div class="price" id="paySummaryPrice">R$ 19,90</div>
+        </div>
+        <div class="pay-title">Forma de pagamento</div>
+        <div class="pay-list">
+          <div class="pay-row selected" data-pay="Cartão de crédito">
+            <div class="pay-icon">💳</div>
+            <div><div class="pay-name">Cartão de crédito</div><div class="pay-detail">•••• 4521</div></div>
+            <div class="pay-radio"><div class="rdot"></div></div>
+          </div>
+          <div class="pay-row" data-pay="Pix">
+            <div class="pay-icon">🔁</div>
+            <div><div class="pay-name">Pix</div><div class="pay-detail">Confirmação instantânea</div></div>
+            <div class="pay-radio"><div class="rdot"></div></div>
+          </div>
+          <div class="pay-row" data-pay="Dinheiro">
+            <div class="pay-icon">💵</div>
+            <div><div class="pay-name">Dinheiro</div><div class="pay-detail">Pagar direto ao motorista</div></div>
+            <div class="pay-radio"><div class="rdot"></div></div>
+          </div>
+        </div>
+        <div class="bottom-bar"><div class="primary-btn" id="payBtn">Pagar e chamar motorista</div></div>
+      </div>
+
+      <!-- SCREEN 5: buscando motorista (varios carros) -->
+      <div class="view" data-view="5">
+        <div class="search-map-wrap" id="searchMapWrap">
+          <div class="city-map">
+            <svg viewBox="0 0 370 520" preserveAspectRatio="none">
+              <rect class="block" x="20" y="30" width="90" height="70" rx="6"></rect>
+              <rect class="block" x="140" y="40" width="70" height="90" rx="6"></rect>
+              <rect class="block" x="240" y="20" width="100" height="60" rx="6"></rect>
+              <rect class="block" x="30" y="140" width="110" height="80" rx="6"></rect>
+              <rect class="block" x="180" y="160" width="80" height="70" rx="6"></rect>
+              <rect class="block" x="270" y="150" width="80" height="90" rx="6"></rect>
+              <path class="road" d="M0,110 H370"></path>
+              <path class="road" d="M0,250 H370"></path>
+              <path class="road" d="M120,0 V520"></path>
+              <path class="road" d="M255,0 V520"></path>
+            </svg>
+          </div>
+          <div class="topbar" style="position:relative; z-index:4;"><div class="compass-mark"><div class="needle"></div></div><div class="brand-name">TrueCompass</div></div>
+          <div class="scan-ring"></div><div class="scan-ring r2"></div><div class="scan-ring r3"></div>
+          <div class="pin o"></div>
+          <div class="search-car" id="car1" style="top:18%; left:20%;">🚗</div>
+          <div class="search-car" id="car2" style="top:30%; left:70%;">🚕</div>
+          <div class="search-car" id="car3" style="top:66%; left:68%;">🚙</div>
+          <div class="search-car" id="car4" style="top:75%; left:20%;">🚗</div>
+          <div class="search-car" id="car5" style="top:45%; left:45%;">🚕</div>
+          <div class="search-car" id="car6" style="top:12%; left:55%;">🚙</div>
+          <div class="search-banner">
+            <div class="l1" id="searchLine1">Buscando motorista<span class="dotting"></span></div>
+            <div class="l2">Localizando os carros mais próximos de você</div>
+            <div class="skeleton"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 6: em andamento (uber-like) -->
+      <div class="view" data-view="6">
+        <div class="ride-map-wrap">
+          <div class="city-map">
+            <svg viewBox="0 0 370 560" preserveAspectRatio="none">
+              <rect class="block" x="20" y="30" width="90" height="70" rx="6"></rect>
+              <rect class="block" x="140" y="40" width="70" height="90" rx="6"></rect>
+              <rect class="block" x="240" y="20" width="100" height="60" rx="6"></rect>
+              <rect class="block" x="30" y="140" width="110" height="80" rx="6"></rect>
+              <rect class="block" x="180" y="160" width="80" height="70" rx="6"></rect>
+              <rect class="block" x="270" y="150" width="80" height="90" rx="6"></rect>
+              <rect class="block" x="40" y="260" width="90" height="90" rx="6"></rect>
+              <rect class="block" x="160" y="270" width="100" height="70" rx="6"></rect>
+              <path class="road" d="M0,110 H370"></path>
+              <path class="road" d="M0,250 H370"></path>
+              <path class="road" d="M120,0 V560"></path>
+              <path class="road" d="M255,0 V560"></path>
+            </svg>
+          </div>
+          <svg style="position:absolute; inset:0; width:100%; height:100%; z-index:2;" viewBox="0 0 370 560" preserveAspectRatio="none">
+            <path id="rideRoutePath" class="ride-route-path" d="M50,420 C110,420 90,300 160,270 C230,240 210,150 300,110"></path>
+          </svg>
+          <div class="status-pill"><span class="bd"></span><span id="statusPillText">Motorista a caminho</span></div>
+          <div class="ride-pin"></div>
+          <div class="ride-car" id="rideCar" style="offset-path:path('M50,420 C110,420 90,300 160,270 C230,240 210,150 300,110');"></div>
+        </div>
+        <div class="ride-sheet">
+          <div class="eta-row">
+            <div><div class="eta-big" id="rideEta">6</div><div class="eta-caption">minutos para chegar</div></div>
+            <div class="eta-dist"><div class="num">3,4 km</div><div class="cap">distância restante</div></div>
+          </div>
+          <div class="driver-row">
+            <div class="avatar">RM</div>
+            <div class="driver-info"><div class="name">Rafael M.</div><div class="car-model">Chevrolet Onix · ABC-1234 · Compass Plus</div></div>
+            <div class="icon-btn">💬</div>
+            <div class="icon-btn">📞</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 7: concluida -->
+      <div class="view" data-view="7">
+        <div class="success-wrap" id="successWrap">
+          <div class="check-circle"><svg viewBox="0 0 24 24"><path class="check-path" d="M4,13 L9,18 L20,6"></path></svg></div>
+          <div class="success-title">Você chegou!</div>
+          <div class="success-sub">O pagamento já foi processado no início da corrida.</div>
+          <div class="receipt">
+            <div class="receipt-row"><span>Categoria</span><span id="receiptFare">Compass Plus</span></div>
+            <div class="receipt-row"><span>Distância</span><span>3,4 km</span></div>
+            <div class="receipt-row"><span>Tempo de viagem</span><span>11 min</span></div>
+            <div class="receipt-row total"><span>Total pago</span><span id="receiptTotal">R$ 19,90</span></div>
+          </div>
+          <div class="restart-btn" id="restartBtn">Fazer nova corrida</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const views = document.querySelectorAll('.view');
+  let selectedFare = { name:'Compass Plus', price:'19,90' };
+  let selectedPay = 'Cartão de crédito';
+  let etaInterval = null;
+  let carTimers = [];
+
+  function goView(n){
+    views.forEach(v=> v.classList.toggle('active', v.dataset.view===String(n)));
+    if(n===5){ runSearchAnimation(); }
+    if(n===6){ runRideAnimation(); }
+    if(n===7){ launchConfetti(); }
+  }
+  document.querySelectorAll('[data-back]').forEach(btn=>{
+    btn.addEventListener('click', ()=> goView(parseInt(btn.dataset.back)));
+  });
+
+  document.getElementById('openSearch').addEventListener('click', ()=> goView(2));
+
+  document.querySelectorAll('.suggest-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      document.getElementById('destTyping').textContent = row.dataset.addr;
+      document.getElementById('destTyping').classList.remove('ph');
+      setTimeout(()=> goView(3), 350);
+    });
+  });
+
+  document.querySelectorAll('.fare-card').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      document.querySelectorAll('.fare-card').forEach(c=> c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedFare = { name: card.querySelector('.fare-name').textContent, price: card.dataset.price };
+    });
+  });
+  document.getElementById('toPaymentBtn').addEventListener('click', function(e){
+    rippleFx(e.currentTarget, e);
+    document.getElementById('paySummaryName').textContent = selectedFare.name;
+    document.getElementById('paySummaryPrice').textContent = 'R$ '+selectedFare.price;
+    setTimeout(()=> goView(4), 200);
+  });
+
+  document.querySelectorAll('.pay-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      document.querySelectorAll('.pay-row').forEach(r=> r.classList.remove('selected'));
+      row.classList.add('selected');
+      selectedPay = row.dataset.pay;
+    });
+  });
+  document.getElementById('payBtn').addEventListener('click', function(e){
+    rippleFx(e.currentTarget, e);
+    setTimeout(()=> goView(5), 220);
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    document.getElementById('destTyping').textContent = 'Digite o destino';
+    document.getElementById('destTyping').classList.add('ph');
+    goView(1);
+  });
+
+  function rippleFx(btn, e){
+    const rect = btn.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className='ripple';
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size+'px';
+    ripple.style.left = (e.clientX-rect.left-size/2)+'px';
+    ripple.style.top = (e.clientY-rect.top-size/2)+'px';
+    btn.appendChild(ripple);
+    setTimeout(()=>ripple.remove(), 650);
+  }
+
+  function runSearchAnimation(){
+    carTimers.forEach(t=> clearTimeout(t));
+    carTimers = [];
+    document.querySelectorAll('.search-car').forEach(c=>{ c.classList.remove('chosen','fading'); });
+    document.getElementById('searchLine1').innerHTML = 'Buscando motorista<span class="dotting"></span>';
+    const chosen = document.getElementById('car3');
+    carTimers.push(setTimeout(()=>{
+      document.querySelectorAll('.search-car').forEach(c=>{ if(c!==chosen) c.classList.add('fading'); });
+      chosen.classList.add('chosen');
+      document.getElementById('searchLine1').textContent = 'Motorista encontrado!';
+    }, 2000));
+    carTimers.push(setTimeout(()=>{ goView(6); }, 3200));
+  }
+
+  function runRideAnimation(){
+    document.getElementById('statusPillText').textContent = 'Motorista a caminho';
+    if(etaInterval) clearInterval(etaInterval);
+    let eta = 6;
+    document.getElementById('rideEta').textContent = eta;
+    let phaseSwitched = false;
+    etaInterval = setInterval(()=>{
+      eta--;
+      if(eta<=3 && !phaseSwitched){
+        phaseSwitched = true;
+        document.getElementById('statusPillText').textContent = 'Em viagem';
+      }
+      if(eta<=0){
+        clearInterval(etaInterval);
+        document.getElementById('statusPillText').textContent = 'Chegando ao destino';
+        setTimeout(()=>{
+          document.getElementById('receiptFare').textContent = selectedFare.name;
+          document.getElementById('receiptTotal').textContent = 'R$ '+selectedFare.price;
+          goView(7);
+        }, 900);
+        return;
+      }
+      document.getElementById('rideEta').textContent = eta;
+    }, 1000);
+  }
+
+  function launchConfetti(){
+    const wrap = document.getElementById('successWrap');
+    const colors = ['#2FBD73','#E8586A','#F3F1E7','#7BE3A9'];
+    for(let i=0;i<24;i++){
+      const c = document.createElement('div');
+      c.className='confetti';
+      c.style.left=(Math.random()*100)+'%';
+      c.style.background=colors[Math.floor(Math.random()*colors.length)];
+      c.style.animationDuration=(1.5+Math.random()*1.1)+'s';
+      c.style.animationDelay=(Math.random()*0.4)+'s';
+      wrap.appendChild(c);
+      setTimeout(()=>c.remove(), 3000);
+    }
+  }
+
+  const body = document.body;
+  document.getElementById('themeToggle').addEventListener('click', ()=>{
+    const next = body.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+    body.setAttribute('data-theme', next);
+    document.getElementById('themeLabel').textContent = next==='dark' ? 'Tema escuro' : 'Tema claro';
+  });
+</script>
+
+</body>
+</html>
