@@ -1,0 +1,11 @@
+# Backend TrueCompass — Railway
+# Versões fixadas nas que foram efetivamente testadas neste projeto.
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+sqlalchemy==2.0.54
+pymysql==1.2.3
+cryptography>=42.0            # exigido pelo PyMySQL para conexão TLS
+bcrypt==5.0.0
+pyjwt==2.7.0
+email-validator==2.3.0
+pydantic==2.13.5
