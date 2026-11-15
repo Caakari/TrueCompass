@@ -216,7 +216,7 @@ export function Busca({
                 <Icone nome={erro ? 'aviso' : 'busca'} tamanho={32} />
               </motion.span>
               <strong>{erro ? 'Busca indisponível' : 'Nada encontrado aqui'}</strong>
-              <span>{erro || 'A cobertura é o centro expandido de São Paulo, onde as ruas reais estão carregadas no grafo.'}</span>
+              <span>{erro || 'A cobertura é a cidade de São Paulo inteira: as ruas reais do OpenStreetMap estão no grafo.'}</span>
               {!erro && !completo && (
                 <button className="buscar-mais" onClick={buscarCompleto}><Icone nome="busca" tamanho={16} /> Buscar em mais fontes</button>
               )}

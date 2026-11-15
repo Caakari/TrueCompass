@@ -38,11 +38,20 @@ export default function App() {
   useEffect(() => { definirAoExpirar(() => definirSessao(null)) }, [])
 
   // Informações da malha: UMA vez, compartilhadas. A geometria das ruas não
-  // vem inteira (são 118 mil cruzamentos): o mapa pede só o recorte visível.
+  // vem inteira (a cidade toda tem centenas de milhares de trechos): o mapa
+  // pede só o recorte visível.
   useEffect(() => {
     let vivo = true
-    Promise.all([api.infoDaMalha(), api.semaforos()])
-      .then(([info, { semaforos }]) => { if (vivo) definirMalha({ ...info, semaforos }) })
+    api.infoDaMalha()
+      .then((info) => {
+        if (!vivo) return
+        definirMalha({ ...info, semaforos: [] })
+        // Os semáforos da cidade inteira são milhares e só aparecem quando a
+        // pessoa liga "Malha e semáforos": chegam depois, sem segurar a abertura.
+        api.semaforos()
+          .then(({ semaforos }) => { if (vivo) definirMalha((m) => m && { ...m, semaforos }) })
+          .catch(() => { /* sem a camada de semáforos; o app segue */ })
+      })
       .catch((f: Error) => { if (vivo) definirFalhaBackend(`${f.message} Suba o backend com: uvicorn api.main:app`) })
     return () => { vivo = false }
   }, [])

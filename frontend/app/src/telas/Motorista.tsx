@@ -389,7 +389,7 @@ function Fila({ online, alternando, alternar, posicao, endereco, resumo, erro, g
       </div>
 
       <AnimatePresence>
-        {gpsFora && <Aviso icone="mapa">Seu GPS está fora da área coberta (centro expandido de SP). Marque sua posição no mapa.</Aviso>}
+        {gpsFora && <Aviso icone="mapa">Seu GPS está fora da cidade de São Paulo, a área coberta. Marque sua posição no mapa.</Aviso>}
         {erro && <Aviso tipo="erro">{erro}</Aviso>}
       </AnimatePresence>
 

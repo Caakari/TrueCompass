@@ -448,7 +448,7 @@ function Inicio({ origem, gps, gpsNaArea, recentes, abrirBusca, aoEscolherRecent
       <AnimatePresence>
         {gps.posicao && !gpsNaArea && !origem && (
           <Aviso icone="mapa">
-            A cobertura é o centro expandido de São Paulo (ruas reais do OpenStreetMap). Escolha a partida pela busca ou no mapa.
+            A cobertura é a cidade de São Paulo (ruas reais do OpenStreetMap). Escolha a partida pela busca ou no mapa.
           </Aviso>
         )}
       </AnimatePresence>
@@ -686,7 +686,7 @@ function EscolhaNoMapa({ escolha, confirmar, cancelar }: { escolha: Escolha; con
           <motion.div key={carregando ? 'c' : fora ? 'f' : lugar?.id ?? 'v'}
                       initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
             {carregando && <><Esqueleto largura="62%" altura={15} /><Esqueleto largura="42%" altura={11} style={{ marginTop: 8 }} /></>}
-            {!carregando && fora && <><b>Fora da área coberta</b><span>Só há ruas reais carregadas no centro expandido de SP.</span></>}
+            {!carregando && fora && <><b>Fora da área coberta</b><span>Só há ruas carregadas dentro da cidade de São Paulo.</span></>}
             {!carregando && !fora && lugar && <><b>{lugar.titulo}</b><span>{lugar.detalhe}</span></>}
           </motion.div>
         </AnimatePresence>

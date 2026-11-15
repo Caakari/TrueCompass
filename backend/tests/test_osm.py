@@ -298,6 +298,62 @@ def test_gz_e_deterministico():
             assert x.read() == y.read()
 
 
+# ------------------------------------------------------------- extrato .pbf
+
+def _com_osmium():
+    try:
+        import osmium  # noqa: F401
+        import shapely  # noqa: F401
+        return True
+    except ImportError:
+        return False      # dependencia so da importacao offline
+
+
+def test_pbf_recorta_pelo_contorno_como_a_overpass():
+    """Via que toca o municipio entra INTEIRA; a de fora, a calcada e a area
+    nao entram; o semaforo da via aceita vem com a etiqueta."""
+    if not _com_osmium():
+        return
+    import osmium
+    from infra.pbf import extrair_vias, ler_contorno
+
+    with tempfile.TemporaryDirectory() as pasta:
+        pbf = os.path.join(pasta, "mini.osm.pbf")
+        contorno = os.path.join(pasta, "contorno.geojson")
+        quadrado = [[-46.70, -23.60], [-46.60, -23.60], [-46.60, -23.50], [-46.70, -23.50], [-46.70, -23.60]]
+        with open(contorno, "w", encoding="utf-8") as arquivo:
+            json.dump({"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {},
+                       "geometry": {"type": "Polygon", "coordinates": [quadrado]}}]}, arquivo)
+
+        pontos = {1: (-23.55, -46.65), 2: (-23.55, -46.64), 3: (-23.55, -46.55),   # 3 fora
+                  4: (-23.40, -46.40), 5: (-23.40, -46.39),                         # longe
+                  6: (-23.56, -46.65), 7: (-23.56, -46.64)}
+        escritor = osmium.SimpleWriter(pbf)
+        for no, (lat, lon) in pontos.items():
+            tags = {"highway": "traffic_signals"} if no == 2 else {}
+            escritor.add_node(osmium.osm.mutable.Node(id=no, location=(lon, lat), tags=tags))
+        vias = [(10, [1, 2, 3], {"highway": "primary"}),          # cruza a divisa: entra inteira
+                (11, [4, 5], {"highway": "residential"}),         # fora
+                (12, [6, 7], {"highway": "footway"}),             # carro nao passa
+                (13, [6, 7], {"highway": "service", "area": "yes"})]
+        for via, nos, tags in vias:
+            escritor.add_way(osmium.osm.mutable.Way(id=via, nodes=nos, tags=tags))
+        escritor.close()
+
+        dados = extrair_vias(pbf, ler_contorno(contorno))
+
+    vias_lidas = {e["id"]: e for e in dados["elements"] if e["type"] == "way"}
+    nos_lidos = {e["id"]: e for e in dados["elements"] if e["type"] == "node"}
+    assert set(vias_lidas) == {10}
+    assert vias_lidas[10]["nodes"] == [1, 2, 3], "a via nao pode ser cortada na divisa"
+    assert set(nos_lidos) == {1, 2, 3}
+    assert nos_lidos[2].get("tags") == {"highway": "traffic_signals"}
+    assert isclose(nos_lidos[3]["lon"], -46.55, abs_tol=1e-7)
+    # O formato e o da Overpass: o resto do pipeline aceita sem adaptacao.
+    grafo = construir_grafo(dados)
+    assert set(grafo.nos) == {1, 2, 3} and grafo.total_arestas() == 4
+
+
 def main():
     testes = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     falhas = 0

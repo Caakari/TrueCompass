@@ -119,13 +119,14 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 |---|---|
 | `osm.py` | Overpass API, parser OSM, semáforos, poda ao componente fortemente conexo |
 | `importar_malha.py` | CLI: gera `backend/dados/malha.json.gz` (município de SP, contraído) uma vez, offline |
+| `pbf.py` | lê extrato `.osm.pbf` e recorta pelo contorno do município (alternativa à Overpass) |
 | `preparar_alt.py` | CLI: gera `backend/dados/alt.bin` (marcos do ALT), derivado da malha |
 | `geocodificacao.py` | busca de lugares, com cache e limite de taxa |
 | `modelos.py` · `banco.py` | tabelas SQLAlchemy e sessão |
 | `seguranca.py` | bcrypt e JWT |
 | `config.py` | configuração via ambiente (caminhos relativos partem de `backend/`) |
 
-## Testes — 213, sem pytest
+## Testes — 214, sem pytest
 
 ```bash
 for t in algoritmos quadtree matriz alt contracao; do python3 matematica/tests/test_$t.py; done
@@ -139,7 +140,7 @@ for t in osm estados api ws;        do python3 backend/tests/test_$t.py; done
 | `matematica/tests/test_matriz.py` | 29 | matriz do mapa, semáforos, mapa de produção |
 | `matematica/tests/test_alt.py` | 23 | ALT: admissibilidade, consistência, artefato, impressão digital |
 | `matematica/tests/test_contracao.py` | 14 | contração: oráculo Dijkstra, mão única, semáforo, corte de 250 m, traçado |
-| `backend/tests/test_osm.py` | 28 | parser OSM, mão única, semáforos, poda, blocos, artefato .gz (sem rede) |
+| `backend/tests/test_osm.py` | 29 | parser OSM, mão única, semáforos, poda, blocos, extrato .pbf, artefato .gz (sem rede) |
 | `backend/tests/test_estados.py` | 18 | Kahn, DAG, transições proibidas |
 | `backend/tests/test_api.py` | 45 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista |
 | `backend/tests/test_ws.py` | 14 | tempo real, isolamento entre corridas |

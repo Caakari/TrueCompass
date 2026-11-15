@@ -11,6 +11,11 @@
     # Sem rede: so contrai um artefato antigo (versao 1):
     python3 -m infra.importar_malha --reprocessar dados/malha.json
 
+    # De um extrato .osm.pbf (quando a Overpass recusa o datacenter), com o
+    # contorno do municipio baixado do Nominatim na primeira vez:
+    pip install -r requirements-importacao.txt
+    python3 -m infra.importar_malha --pbf dados/osm_bruto/sao-paulo-latest.osm.pbf
+
 Roda UMA vez, offline, e versiona a saida. O servidor nunca consulta a
 Overpass no boot: ele le o arquivo gerado aqui.
 
@@ -116,6 +121,11 @@ def main():
                        help="municipio de Sao Paulo inteiro, em blocos (padrao)")
     fonte.add_argument("--reprocessar", metavar="ARTEFATO",
                        help="nao baixa nada: so contrai um artefato existente")
+    fonte.add_argument("--pbf", metavar="EXTRATO",
+                       help="le um extrato .osm.pbf em vez de consultar a Overpass")
+    ap.add_argument("--contorno", default=os.path.join(PASTA_BACKEND, "dados", "osm_bruto",
+                                                       "municipio_sp.geojson"),
+                    help="GeoJSON do municipio (com --pbf); baixado do Nominatim se faltar")
     ap.add_argument("--sul", type=float)
     ap.add_argument("--oeste", type=float)
     ap.add_argument("--norte", type=float)
@@ -145,7 +155,19 @@ def main():
         return
 
     caixa_dada = None not in (args.sul, args.oeste, args.norte, args.leste)
-    if caixa_dada:
+    if args.pbf:
+        from infra.pbf import baixar_contorno, extrair_vias, ler_contorno
+        if not os.path.exists(args.contorno):
+            os.makedirs(os.path.dirname(args.contorno) or ".", exist_ok=True)
+            baixar_contorno(AREA_MUNICIPIO_SP - 3600000000, args.contorno)
+            print(f"Contorno do municipio baixado do Nominatim: {args.contorno}")
+        contorno = ler_contorno(args.contorno)
+        print(f"Lendo {args.pbf} (recorte pelo contorno do municipio)")
+        inicio = time.perf_counter()
+        dados = extrair_vias(args.pbf, contorno, progresso=lambda n, s: print(
+            f"  {n:>11,} objetos com highway lidos ({s:.0f}s)"))
+        print(f"  {len(dados['elements']):,} elementos em {time.perf_counter() - inicio:.1f}s")
+    elif caixa_dada:
         if args.sul >= args.norte or args.oeste >= args.leste:
             ap.error("caixa invalida: exige sul < norte e oeste < leste")
         caixa, grade, area = (args.sul, args.oeste, args.norte, args.leste), (1, 1), None
@@ -154,9 +176,10 @@ def main():
         caixa, grade, area = CAIXA_MUNICIPIO_SP, GRADE_MUNICIPIO_SP, AREA_MUNICIPIO_SP
         print(f"Baixando o municipio de Sao Paulo em {grade[0] * grade[1]} blocos")
 
-    inicio = time.perf_counter()
-    dados = baixar_em_blocos(caixa, grade, args.cache, area=area)
-    print(f"  {len(dados['elements']):,} elementos em {time.perf_counter() - inicio:.1f}s")
+    if not args.pbf:
+        inicio = time.perf_counter()
+        dados = baixar_em_blocos(caixa, grade, args.cache, area=area)
+        print(f"  {len(dados['elements']):,} elementos em {time.perf_counter() - inicio:.1f}s")
 
     bruto = construir_grafo(dados)
     antes = estatisticas(bruto)

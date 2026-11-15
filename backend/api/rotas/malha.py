@@ -10,6 +10,8 @@ Nao exige autenticacao: e geometria derivada de dado publico do OpenStreetMap,
 sem qualquer informacao de usuario.
 """
 
+import statistics
+
 from fastapi import APIRouter, Depends, Query
 from starlette.requests import HTTPConnection
 
@@ -36,8 +38,11 @@ def resumo_da_malha(grafo):
         "arestas": grafo.total_arestas(),
         "caixa": {"sul": min(latitudes), "norte": max(latitudes),
                   "oeste": min(longitudes), "leste": max(longitudes)},
-        "centro": {"lat": (min(latitudes) + max(latitudes)) / 2,
-                   "lon": (min(longitudes) + max(longitudes)) / 2},
+        # MEDIANA dos nos, e nao o meio da caixa: na cidade inteira o meio da
+        # caixa cai na zona sul (a cidade se estende ate Marsilac), enquanto a
+        # mediana fica onde esta a maior parte das ruas.
+        "centro": {"lat": statistics.median(latitudes),
+                   "lon": statistics.median(longitudes)},
     }
 
 

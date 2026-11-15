@@ -91,11 +91,15 @@ Camada de infraestrutura em `backend/infra/` (rede e disco; `algoritmos/` NUNCA 
 - `osm.py` — Overpass API, parser OSM → `Grafo`, poda ao componente
   fortemente conexo, serialização do artefato
 - `importar_malha.py` — CLI: roda uma vez offline e gera `backend/dados/malha.json.gz`
-  (versionado, contraído). Padrão: município de SP em 12 blocos; `--reprocessar`
-  contrai um artefato antigo sem rede
+  (versionado, contraído): **município de São Paulo inteiro**, 137 mil nós,
+  6,8 mil semáforos, 7,6 MB. Fontes: `--pbf` (extrato, o que gerou o atual),
+  Overpass em 12 blocos (padrão), `--reprocessar` (só contrai, sem rede)
+- `pbf.py` — lê extrato `.osm.pbf` (pyosmium) e recorta pelo contorno do
+  município (Nominatim), devolvendo o MESMO formato da Overpass. Dependências só
+  da importação: `backend/requirements-importacao.txt`
 - `preparar_alt.py` — CLI: gera `backend/dados/alt.bin` com os marcos do ALT
 - `geocodificacao.py` — busca de lugares: Photon ao digitar, Nominatim só no Enter
-- `backend/tests/test_osm.py` — 28 testes, rodam sem rede (fixture embutido)
+- `backend/tests/test_osm.py` — 29 testes, rodam sem rede (fixture embutido)
 
 Camada de domínio em `backend/dominio/` (regras, sem HTTP e sem SQL bruto):
 
@@ -292,3 +296,23 @@ Decisões da contração (malha da cidade inteira):
   `/malha/info` é calculado uma vez no boot.
 - O artefato `.gz` é **determinístico** (`gzip.compress(mtime=0)`): o mesmo grafo
   gera os mesmos bytes e o git não acusa mudança à toa.
+
+Decisões da malha da cidade inteira:
+
+- A Overpass (e a Geofabrik) **derrubam a conexão** vinda do datacenter onde a
+  malha é gerada. A fonte passou a ser o extrato `.osm.pbf` do estado na OSM
+  França (`download.openstreetmap.fr/extracts/south-america/brazil/southeast/`),
+  lido com pyosmium em ~25 s. A BBBike não tem São Paulo.
+- O recorte imita a Overpass com área: entra toda via trafegável que tem **pelo
+  menos um nó** dentro do contorno do município (relação 298285, via Nominatim),
+  com TODOS os nós — a rua não é cortada na divisa.
+- Medido em SP inteira: 650 mil nós → poda 644 mil → contração **137 mil**
+  (21%). Oráculo: custos idênticos para 2 × 137 mil destinos. Importação em 57 s
+  com pico de 1,5 GB (offline).
+- No servidor: boot ~3 s, ~400 MB de RAM. ALT 11,1× sobre o Dijkstra, ~19 ms
+  por rota (haversine: ~148 ms), 0 rotas subótimas. `alt.bin` de 36 MB, gerado
+  no build.
+- `/malha/info` devolve como centro a **mediana** dos nós, não o meio da caixa:
+  a cidade vai até Marsilac, e o meio da caixa cairia na zona sul.
+- Os semáforos (6,8 mil) chegam **depois** da informação da malha, sem segurar
+  a abertura do app — só aparecem com "Malha e semáforos" ligado.

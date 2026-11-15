@@ -32,7 +32,7 @@ python3 matematica/tests/test_algoritmos.py   # 19 — Dijkstra, A*, pareamento 
 python3 matematica/tests/test_quadtree.py     # 23 — índice espacial
 python3 matematica/tests/test_contracao.py    # 14 — contração da malha
 python3 matematica/tests/test_matriz.py       # 29 — matriz do mapa e semáforos
-python3 backend/tests/test_osm.py             # 28 — parser OpenStreetMap
+python3 backend/tests/test_osm.py             # 29 — parser OpenStreetMap
 python3 backend/tests/test_estados.py         # 18 — Kahn e DAG da corrida
 python3 backend/tests/test_api.py             # 45 — ciclo completo via HTTP
 python3 backend/tests/test_ws.py              # 14 — tempo real
@@ -86,9 +86,22 @@ O front anterior continua em `frontend/web` (`npm run dev`, porta 5173).
 
 ## Importar a malha real do OpenStreetMap
 
+O artefato atual cobre o **município de São Paulo inteiro** e saiu de um
+extrato `.osm.pbf` (a Overpass recusa conexões de vários datacenters):
+
 ```bash
 cd backend
-python3 -m infra.importar_malha                # município de São Paulo inteiro
+pip install -r requirements-importacao.txt
+curl -o dados/osm_bruto/sao-paulo-latest.osm.pbf \
+  https://download.openstreetmap.fr/extracts/south-america/brazil/southeast/sao-paulo-latest.osm.pbf
+python3 -m infra.importar_malha --pbf dados/osm_bruto/sao-paulo-latest.osm.pbf
+```
+
+Leva ~1 minuto (pico de 1,5 GB de RAM). O contorno do município é baixado do
+Nominatim na primeira vez. Pela Overpass, quando ela aceita a conexão:
+
+```bash
+python3 -m infra.importar_malha                # município de São Paulo, em 12 blocos
 ```
 
 Roda **uma vez**, offline, e gera `backend/dados/malha.json.gz` (versionado). O
