@@ -26,3 +26,6 @@ backend/dados/alt.bin
 # dele no boot, e gerá-lo exigiria bater na Overpass durante o build.
 # Comprimido (.gz) e com os nos de passagem contraidos.
 !backend/dados/malha.json.gz
+
+# prévia do banner: artefato derivado, sai de `gerar_banner.py --previa`
+docs/banner/previa_banner.png
