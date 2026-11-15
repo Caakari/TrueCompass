@@ -164,8 +164,9 @@ linguagem simples, e `CLAUDE.md` para as decisões de projeto que valem manter.
 ## Deploy
 
 - **Back-end → Railway**, com a **raiz** do repositório (o backend importa
-  `matematica/`). `Procfile`, `railway.json` e `requirements.txt` da raiz já
-  apontam para `backend/`. Health check em `/saude`. Adicione o plugin MySQL e
+  `matematica/`). `Procfile` e `railway.json` da raiz já apontam para
+  `backend/`; o `requirements.txt` da raiz traz as dependências completas (o
+  Railpack só enxerga ele na hora do pip). Health check em `/saude`. Adicione o plugin MySQL e
   defina `JWT_SECRET` e `CORS_ORIGENS`.
 - **Front-end → Vercel**, diretório raiz `frontend/app`, com `VITE_API_URL`
   apontando para o backend.

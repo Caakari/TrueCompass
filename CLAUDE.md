@@ -65,7 +65,10 @@ docs/        Documentacao_App/ · Documentacao_Aula/
   (a matriz, em `matematica/mapas/`): o servidor sobe de qualquer pasta.
 - Servidor: `uvicorn --app-dir backend api.main:app` na raiz (é assim no
   Railway, que precisa da RAIZ do repositório por causa de `matematica/`).
-  `requirements.txt` da raiz só faz `-r backend/requirements.txt`.
+  As dependências ficam no `requirements.txt` da **raiz**, autocontido, e
+  `backend/requirements.txt` só faz `-r ../requirements.txt`. **Nunca** o
+  contrário: o Railpack (construtor atual do Railway) copia só o arquivo da
+  raiz para rodar o pip, e um `-r backend/...` ali quebra o build.
 
 Camada de algoritmos em `matematica/algoritmos/` (matemática pura, sem FastAPI nem SQL):
 
