@@ -187,6 +187,7 @@ def criar_app():
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.origens_cors,      # o dominio do front no Vercel
+        allow_origin_regex=config.padrao_cors,  # e as previas dele (`*` no CORS_ORIGENS)
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

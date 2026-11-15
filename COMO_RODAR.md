@@ -34,7 +34,7 @@ python3 matematica/tests/test_contracao.py    # 14 — contração da malha
 python3 matematica/tests/test_matriz.py       # 29 — matriz do mapa e semáforos
 python3 backend/tests/test_osm.py             # 29 — parser OpenStreetMap
 python3 backend/tests/test_estados.py         # 18 — Kahn e DAG da corrida
-python3 backend/tests/test_api.py             # 45 — ciclo completo via HTTP
+python3 backend/tests/test_api.py             # 49 — ciclo completo via HTTP
 python3 backend/tests/test_ws.py              # 14 — tempo real
 ```
 
@@ -166,7 +166,9 @@ linguagem simples, e `CLAUDE.md` para as decisões de projeto que valem manter.
 - **Back-end → Railway**, com a **raiz** do repositório (o backend importa
   `matematica/`). `Procfile` e `railway.json` da raiz já apontam para
   `backend/`; o `requirements.txt` da raiz traz as dependências completas (o
-  Railpack só enxerga ele na hora do pip). Health check em `/saude`. Adicione o plugin MySQL e
+  Railpack só enxerga ele na hora do pip). Health check em `/saude`.
+  `CORS_ORIGENS` aceita `*` para as prévias do Vercel, separado por vírgula:
+  `https://prototipo-truecompass-frontend.vercel.app,https://prototipo-truecompass-frontend-*-product-kauan.vercel.app`. Adicione o plugin MySQL e
   defina `JWT_SECRET` e `CORS_ORIGENS`.
 - **Front-end → Vercel**, diretório raiz `frontend/app`, com `VITE_API_URL`
   apontando para o backend.

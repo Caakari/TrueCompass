@@ -115,7 +115,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `main.py` — app e `lifespan` (valida DAG, carrega malha, constrói reverso)
 - `rotas/` — auth, motoristas, corridas, malha, lugares, viagens, ws · `conexoes.py` — WebSocket
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (45), `test_ws.py` (14)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (49), `test_ws.py` (14)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -172,6 +172,11 @@ Decisões que valem manter:
 - **Publicar no WebSocket só DEPOIS do commit.** Rotas de corrida não chamam
   `sessao.commit()`; chamam `api.eventos.comitar_e_publicar`, que impõe a
   ordem. Publicar antes faria o cliente ver estado que o rollback desfez.
+- `CORS_ORIGENS` aceita `*` como curinga, para as prévias do Vercel (um
+  endereço por branch e por commit): `https://app.vercel.app,https://app-*-equipe.vercel.app`.
+  O `*` casa só `[a-z0-9-]+` — nunca ponto nem barra —, então não atravessa
+  para outro domínio. Barra no fim de uma origem é ignorada (o navegador nunca
+  a envia; já quebrou o deploy uma vez).
 - Dependências que leem `app.state` usam `HTTPConnection`, **nunca** `Request`:
   em rota WebSocket o FastAPI injeta `WebSocket`, e anotar `Request` quebra só
   em tempo de execução, no primeiro cliente que tentar acompanhar.

@@ -2,6 +2,7 @@
 """Configuracao lida do ambiente. Nenhum segredo no codigo."""
 
 import os
+import re
 from functools import lru_cache
 
 from matematica_no_caminho import PASTA_BACKEND, PASTA_MATEMATICA
@@ -29,6 +30,33 @@ def _normalizar_url(url):
     return url
 
 
+def separar_origens(texto):
+    """CORS_ORIGENS -> (origens exatas, expressao regular ou None).
+
+    Aceita `*` como CURINGA dentro de uma origem, para as previas do Vercel,
+    que ganham um endereco por branch e por commit:
+
+        https://meu-app.vercel.app,https://meu-app-*-minha-equipe.vercel.app
+
+    O `*` casa so letras minusculas, digitos e hifen -- nunca ponto nem barra.
+    Assim ele nao atravessa para outro dominio: `*.vercel.app` NAO aceitaria
+    `evil.com/x.vercel.app`, e `meu-app-*` nao aceita `meu-app-x.evil.com`.
+    Origem com barra no fim e normalizada: o navegador nunca a envia assim.
+    """
+    exatas, padroes = [], []
+    for origem in texto.split(","):
+        origem = origem.strip().rstrip("/")
+        if not origem:
+            continue
+        if "*" in origem:
+            partes = (re.escape(p) for p in origem.split("*"))
+            padroes.append("[a-z0-9-]+".join(partes))
+        else:
+            exatas.append(origem)
+    padrao = f"^(?:{'|'.join(padroes)})$" if padroes else None
+    return exatas, padrao
+
+
 class Config:
     def __init__(self):
         self.url_banco = _normalizar_url(
@@ -42,10 +70,8 @@ class Config:
         self.considerar_semaforos = os.getenv("SEMAFOROS", "1") not in ("0", "false")
         # Marcos do ALT, gerados por `python3 -m infra.preparar_alt`.
         self.arquivo_alt = _caminho("ALT_ARQUIVO", "dados/alt.bin")
-        self.origens_cors = [
-            o.strip() for o in os.getenv("CORS_ORIGENS", "http://localhost:5173").split(",")
-            if o.strip()
-        ]
+        self.origens_cors, self.padrao_cors = separar_origens(
+            os.getenv("CORS_ORIGENS", "http://localhost:5173"))
         self.limite_matching_s = float(os.getenv("MATCHING_LIMITE_S", str(15 * 60)))
         self.raio_busca_m = float(os.getenv("MATCHING_RAIO_M", "3000"))
         self.max_candidatos = int(os.getenv("MATCHING_MAX_CANDIDATOS", "20"))

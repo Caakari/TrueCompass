@@ -23,6 +23,10 @@ os.environ["AMBIENTE"] = "teste"
 # padrao do servidor. Sem isto, trocar o mapa de producao quebra a suite toda.
 os.environ["MALHA_ARQUIVO"] = "__inexistente__"
 os.environ["MAPA_MATRIZ"] = "__inexistente__"
+# Origem exata (com a barra no fim que ja enganou o deploy uma vez) e um
+# padrao com curinga, como as previas do Vercel.
+os.environ["CORS_ORIGENS"] = ("https://app-teste.vercel.app/,"
+                              "https://app-teste-*-equipe.vercel.app")
 
 from fastapi.testclient import TestClient      # noqa: E402
 
@@ -577,6 +581,46 @@ def test_inicio_do_dia_segue_o_fuso_de_sao_paulo():
     # as 03:00 UTC de 15/11.
     agora = datetime(2026, 11, 16, 1, 30, tzinfo=timezone.utc)
     assert inicio_do_dia_utc(agora) == datetime(2026, 11, 15, 3, 0)
+
+
+# -------------------------------------------------------------------- CORS
+
+def _preflight(origem):
+    return cliente.options("/auth/login", headers={
+        "Origin": origem, "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type"})
+
+
+def test_cors_aceita_a_origem_exata_mesmo_configurada_com_barra():
+    r = _preflight("https://app-teste.vercel.app")
+    assert r.status_code == 200
+    assert r.headers.get("access-control-allow-origin") == "https://app-teste.vercel.app"
+
+
+def test_cors_aceita_as_previas_pelo_curinga():
+    for origem in ("https://app-teste-git-main-equipe.vercel.app",
+                   "https://app-teste-k3j9x2abc-equipe.vercel.app"):
+        r = _preflight(origem)
+        assert r.status_code == 200, origem
+        assert r.headers.get("access-control-allow-origin") == origem
+
+
+def test_cors_recusa_quem_so_parece_com_o_padrao():
+    for origem in ("https://evil.com",
+                   "https://app-teste-x-equipe.vercel.app.evil.com",   # sufixo forjado
+                   "https://app-teste-x.evil-equipe.vercel.app",       # ponto no curinga
+                   "http://app-teste-git-main-equipe.vercel.app",      # sem https
+                   "https://outro-app-git-main-equipe.vercel.app"):
+        r = _preflight(origem)
+        assert "access-control-allow-origin" not in r.headers, origem
+
+
+def test_separar_origens():
+    from infra.config import separar_origens
+    exatas, padrao = separar_origens(" https://a.app/ , https://a-*-eq.app ,, ")
+    assert exatas == ["https://a.app"]
+    assert padrao == r"^(?:https://a\-[a-z0-9-]+\-eq\.app)$"
+    assert separar_origens("https://a.app") == (["https://a.app"], None)
 
 
 def main():
