@@ -71,7 +71,21 @@ def test_tabelas_novas_sao_criadas_pelo_create_all():
         Base.metadata.create_all(engine)
         migrar(engine, Base.metadata)
         tabelas = set(inspect(engine).get_table_names())
-        assert {"locais_salvos", "avaliacoes"} <= tabelas
+        assert {"locais_salvos", "avaliacoes", "corrida_paradas", "mensagens"} <= tabelas
+    finally:
+        engine.dispose()
+        os.unlink(caminho)
+
+
+def test_indice_unico_da_coluna_nova_e_criado():
+    """token_compartilhar precisa do indice UNICO (busca do link publico)."""
+    engine, caminho = banco_antigo()
+    try:
+        Base.metadata.create_all(engine)
+        migrar(engine, Base.metadata)
+        indices = {i["name"]: i for i in inspect(engine).get_indexes("corridas")}
+        assert "ix_corridas_token_compartilhar" in indices
+        assert indices["ix_corridas_token_compartilhar"]["unique"]
     finally:
         engine.dispose()
         os.unlink(caminho)

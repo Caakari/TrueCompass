@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, urlDoWebSocket } from './api'
-import type { EstadoCorrida, EventoAoVivo, Lugar, Ponto } from './tipos'
+import type { EstadoCorrida, EventoAoVivo, Lugar, Mensagem, Ponto } from './tipos'
 
 // ===================================================================== GPS
 
@@ -110,10 +110,14 @@ export function useCorridaAoVivo(corridaId: number | null, token: string) {
   const [versao, definirVersao] = useState(0)
   const [posicaoMotorista, definirPosicao] = useState<Ponto | null>(null)
   const [conectado, definirConectado] = useState(false)
+  // Última mensagem do chat que chegou pelo socket (o chat e o contador de
+  // não lidas reagem a ela).
+  const [mensagem, definirMensagem] = useState<Mensagem | null>(null)
 
   useEffect(() => {
     definirEstado(null)
     definirPosicao(null)
+    definirMensagem(null)
     if (!corridaId || !token) return
     let vivo = true
     let socket: WebSocket | null = null
@@ -135,6 +139,7 @@ export function useCorridaAoVivo(corridaId: number | null, token: string) {
         try { dados = JSON.parse(evento.data) } catch { return }
         if (dados.evento === 'estado') { definirEstado(dados.estado); definirVersao((v) => v + 1) }
         if (dados.evento === 'posicao') definirPosicao({ lat: dados.lat, lon: dados.lon })
+        if (dados.evento === 'mensagem') definirMensagem(dados.mensagem)
       }
     }
     abrir()
@@ -153,7 +158,7 @@ export function useCorridaAoVivo(corridaId: number | null, token: string) {
     }
   }, [corridaId, token])
 
-  return { estado, versao, posicaoMotorista, conectado }
+  return { estado, versao, posicaoMotorista, conectado, mensagem }
 }
 
 // ============================================================ layout

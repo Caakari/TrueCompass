@@ -75,6 +75,8 @@ export interface Estimativa {
   custo_estimado: number
   /** Do mais barato ao mais caro; a rota é a mesma, muda o carro. */
   categorias: OpcaoViagem[]
+  /** Cruzamentos onde cada parada foi ancorada, na ordem. */
+  paradas: Ponto[]
   pontos: LatLon[]
   semaforos_no_caminho: number
   ancoragem_m: { origem: number; destino: number }
@@ -85,6 +87,8 @@ export interface Estimativa {
     heuristica?: 'alt' | 'haversine'
     velocidade_max_kmh: number
     nos_na_malha: number
+    /** Uma busca por trecho: origem → paradas → destino. */
+    trechos?: number
   }
   motoristas: { proximos: number; eta_mais_proximo_s: number | null } | null
   /** Frente de onda de cada busca, na ordem em que os nós foram alcançados. */
@@ -119,12 +123,36 @@ export interface Corrida {
   destino_texto: string | null
   /** Nota que QUEM PERGUNTA deu nesta corrida; null = ainda não avaliou. */
   minha_avaliacao: number | null
+  paradas: Parada[]
+  /** Só o passageiro recebe; null = ainda não compartilhada. */
+  token_compartilhar: string | null
   passageiro_nome: string | null
   origem: LatLon | null
   destino: LatLon | null
 }
 
 export interface Rota { segundos: number; metros: number; pontos: LatLon[] }
+
+export interface Parada extends Ponto { texto: string | null }
+
+export interface Mensagem { id: number; autor_id: number; texto: string; criada_em: string | null }
+
+/** /publico/acompanhar/{token}: o mínimo, para quem recebeu o link. */
+export interface Acompanhamento {
+  estado: EstadoCorrida
+  ativa: boolean
+  passageiro: string | null
+  motorista: string | null
+  carro: string | null
+  placa: string | null
+  posicao_motorista: LatLon | null
+  origem: LatLon | null
+  destino: LatLon | null
+  destino_texto: string | null
+  paradas: Parada[]
+  pontos: LatLon[]
+  segundos_restantes: number | null
+}
 
 /** Simulado: nenhum pagamento real é processado. */
 export type FormaPagamento = 'pix' | 'cartao' | 'dinheiro'
@@ -187,5 +215,6 @@ export interface RespostaPosicao {
 export type EventoAoVivo =
   | { evento: 'estado'; corrida_id: number; estado: EstadoCorrida }
   | { evento: 'posicao'; corrida_id: number; motorista_id: number; lat: number; lon: number }
+  | { evento: 'mensagem'; corrida_id: number; mensagem: Mensagem }
 
 export type Tema = 'escuro' | 'claro'

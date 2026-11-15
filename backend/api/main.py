@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from algoritmos.contracao import Geometria
 from algoritmos.indice_espacial import indice_dos_nos
 from api.conexoes import GerenciadorConexoes
-from api.rotas import auth, corridas, lugares, malha, motoristas, usuarios, viagens, ws
+from api.rotas import auth, corridas, lugares, malha, motoristas, publico, usuarios, viagens, ws
 from api.rotas.malha import resumo_da_malha
 from dominio.estados import validar_dag
 from dominio.registro import RegistroMotoristas
@@ -192,7 +192,7 @@ def criar_app():
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for modulo in (auth, usuarios, motoristas, corridas, malha, lugares, viagens, ws):
+    for modulo in (auth, usuarios, motoristas, corridas, malha, lugares, viagens, publico, ws):
         app.include_router(modulo.rotas)
 
     @app.get("/saude", tags=["infra"])

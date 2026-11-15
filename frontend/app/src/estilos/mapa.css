@@ -140,3 +140,11 @@
 .pino-central .pino-destino, .pino-central .pino-origem { animation: none; }
 .pino-central .pino-origem.grande { margin-bottom: -15px; }
 .pino-sombra { width: 16px; height: 6px; border-radius: 50%; background: #000; filter: blur(2px); margin-top: -1px; }
+
+/* ---- parada no caminho: círculo escuro numerado, entre a origem e o destino */
+.pino-parada {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--texto); color: var(--painel); border: 3px solid #fff;
+  font: 700 11.5px 'Space Grotesk', sans-serif; box-shadow: 0 6px 12px -4px rgba(0,0,0,.5);
+  animation: pousar .6s var(--curva) both;
+}

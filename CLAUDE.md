@@ -118,7 +118,8 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `rotas/` — auth, motoristas, corridas, malha, lugares, viagens, ws · `conexoes.py` — WebSocket
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (63), `test_ws.py` (14), `test_migracoes.py` (5)
+- `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (72), `test_ws.py` (15), `test_migracoes.py` (6)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -213,6 +214,25 @@ Banco e migração:
 - Pagamento (Pix, cartão, dinheiro) é **simulado**: fica gravado na corrida,
   nenhuma cobrança real acontece.
 
+Paradas, chat e compartilhamento:
+
+- Até **3 paradas**, em `corrida_paradas` (tabela própria, com o nó ancorado).
+  Com a ordem fixa, o caminho mínimo é **exatamente** a concatenação dos mínimos
+  de cada trecho (`rota_por_paradas`): um A* por trecho, cada um com a
+  heurística apontando para o fim DAQUELE trecho. Teste: total = soma dos
+  trechos; o Dijkstra confere cada um. Prévia, pedido e `/rota` usam a mesma
+  função.
+- Chat só em `alocacao`, `rota` e `em_curso`; depois vira histórico (só
+  leitura). A mensagem é gravada e SÓ DEPOIS publicada no WebSocket da corrida
+  (evento `mensagem`), a mesma regra das transições.
+- Link de acompanhamento: token **aleatório** (`secrets.token_urlsafe(16)`, com
+  índice único), não derivado do id. Só o passageiro gera e vê. A página pública
+  mostra o mínimo (primeiro nome, carro, placa, posição, trajeto) e consulta a
+  cada 5 s — o WebSocket exige token de quem está na corrida. Encerrada, para de
+  mostrar posição.
+- Com paradas, o servidor não sabe quais já foram visitadas: o link mostra o
+  trajeto planejado e **não** inventa tempo restante.
+
 Decisões do front-end:
 
 - **`layoutId` dentro da folha prende a troca de fase.** A `Folha` usa
@@ -220,7 +240,12 @@ Decisões do front-end:
   (`layoutId`) no conteúdo que sai faz a saída nunca terminar, e a fase seguinte
   não entra (a folha fica vazia). Foi o destaque do seletor de pagamento:
   destaque em CSS. O `layoutId="caixa-busca"` é a exceção que funciona, porque
-  tem par na tela de busca.
+  tem par na tela de busca — e só na busca da VIAGEM (dois campos).
+- Pelo mesmo motivo, os cartões de categoria **não** têm a prop `layout`: a
+  lista remonta a cada nova estimativa (parada nova, origem e destino trocados),
+  e um componente `layout` remontado prendia a saída da folha. Esse defeito
+  existia antes das paradas: trocar origem e destino e confirmar abria uma folha
+  vazia. Teste no navegador antes de pôr `layout`/`layoutId` dentro da `Folha`.
 
 - O fluxo segue o dos apps de corrida (estilo Uber), com a identidade do
   TrueCompass: tela inicial é UMA pergunta ("Para onde?") + recentes; a prévia

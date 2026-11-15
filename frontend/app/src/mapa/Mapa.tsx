@@ -46,6 +46,8 @@ interface Props {
   usuario?: Ponto | null
   origem?: Ponto | null
   destino?: Ponto | null
+  /** Paradas no caminho, na ordem (marcadores numerados). */
+  paradas?: Ponto[]
   motorista?: Ponto | null
   radar?: Ponto | null
   rota?: LatLon[]
@@ -63,6 +65,8 @@ interface Props {
 }
 
 const VAZIO: LatLon[] = []
+const SEM_PARADAS: Ponto[] = []
+const MAXIMO_PARADAS = 3
 
 function cor(nome: string, alternativa: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(nome).trim() || alternativa
@@ -74,6 +78,7 @@ const icone = (html: string, tamanho: [number, number], ancora: [number, number]
 const ICONES = {
   origem: () => icone('<div class="pino-origem"><i></i></div>', [24, 24], [12, 12]),
   destino: () => icone('<div class="pino-destino"><span></span></div>', [30, 40], [15, 38]),
+  parada: (n: number) => icone(`<div class="pino-parada">${n}</div>`, [24, 24], [12, 12]),
   usuario: () => icone('<div class="ponto-usuario"></div>', [20, 20], [10, 10]),
   radar: () => icone('<div class="radar"><b></b><i></i><i></i><i></i></div>', [280, 280], [140, 140], 'marcador-radar'),
   carro: () => icone(`<div class="carro"><svg viewBox="0 0 40 40" width="40" height="40">
@@ -88,7 +93,7 @@ const ICONES = {
 
 export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
   const {
-    tema, centro, usuario, origem, destino, motorista, radar,
+    tema, centro, usuario, origem, destino, paradas = SEM_PARADAS, motorista, radar,
     rota = VAZIO, rotaMotorista = VAZIO, conectores, semaforos = [],
     onda = null, cometa = false, mostrarMalha = false,
   } = props
@@ -360,7 +365,7 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
   useEffect(() => { linha('conectores').setLatLngs(conectores ?? []) }, [conectores])
 
   // ------------------------------- marcadores: criados uma vez, depois movidos
-  function marcador(chave: keyof typeof ICONES | 'motorista', ponto: Ponto | null | undefined,
+  function marcador(chave: string, ponto: Ponto | null | undefined,
                     fabrica: () => L.DivIcon, z = 0): L.Marker | null {
     const mapa = mapaRef.current
     if (!mapa) return null
@@ -378,6 +383,9 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
   useEffect(() => { marcador('usuario', usuario, ICONES.usuario, -100) }, [usuario?.lat, usuario?.lon])
   useEffect(() => { marcador('origem', origem, ICONES.origem, 200) }, [origem?.lat, origem?.lon])
   useEffect(() => { marcador('destino', destino, ICONES.destino, 300) }, [destino?.lat, destino?.lon])
+  useEffect(() => {
+    for (let i = 0; i < MAXIMO_PARADAS; i++) marcador(`parada${i}`, paradas[i] ?? null, () => ICONES.parada(i + 1), 250)
+  }, [paradas.map((p) => `${p.lat},${p.lon}`).join(';')])
   useEffect(() => { marcador('radar', radar, ICONES.radar, -200) }, [radar?.lat, radar?.lon])
 
   // ------------------------------------------------ carro, interpolado

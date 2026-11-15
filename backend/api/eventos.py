@@ -42,6 +42,11 @@ def mensagem_posicao(corrida_id, motorista_id, lat, lon):
     }
 
 
+def mensagem_chat(corrida_id, mensagem):
+    """Mensagem nova do chat; `mensagem` ja serializada (MensagemSaida)."""
+    return {"evento": "mensagem", "corrida_id": corrida_id, "mensagem": mensagem, "em": _agora()}
+
+
 def comitar_e_publicar(sessao, conexoes, corrida):
     """Confirma a transacao e so entao avisa quem acompanha.
 

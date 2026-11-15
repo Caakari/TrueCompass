@@ -182,6 +182,19 @@ def test_posicao_do_motorista_chega_no_mapa():
     assert abs(evento["lat"] - nova["lat"]) < 1e-9
 
 
+def test_mensagem_do_chat_chega_ao_outro_lado():
+    passageiro, motorista, cid = corrida_pronta()
+    with abrir(cid, motorista) as ws:
+        ws.receive_json()
+        r = cliente.post(f"/corridas/{cid}/mensagens", json={"texto": "Estou na portaria"},
+                         headers=cabecalho(passageiro))
+        assert r.status_code == 201, r.text
+        evento = ws.receive_json()
+    assert evento["evento"] == "mensagem"
+    assert evento["mensagem"]["texto"] == "Estou na portaria"
+    assert evento["mensagem"]["id"] == r.json()["id"]
+
+
 def test_posicao_sem_corrida_ativa_nao_publica():
     """Motorista ocioso nao deve gerar trafego em corrida nenhuma."""
     limpar_pool()

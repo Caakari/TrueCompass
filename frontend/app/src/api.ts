@@ -7,7 +7,7 @@
  */
 import type {
   Caixa, Corrida, EdicaoPerfil, Estimativa, FormaPagamento, IdCategoria, InfoMalha, ItemHistorico, Lugar,
-  LocalSalvo, Perfil, Ponto, RespostaPosicao, ResumoMotorista, Rota, TipoLocal,
+  Acompanhamento, LocalSalvo, Mensagem, Perfil, Ponto, RespostaPosicao, ResumoMotorista, Rota, TipoLocal,
   Semaforo, Sessao, TipoUsuario, Trecho,
 } from './tipos'
 
@@ -117,10 +117,11 @@ export const api = {
       `/lugares/reverso?${new URLSearchParams({ lat: String(lat), lon: String(lon) })}`, { token, sinal }),
 
   // ---- prévia: o mesmo A* do pedido, com a frente de onda das buscas
-  estimar: (token: string, origem: Ponto, destino: Ponto, sinal?: AbortSignal) =>
+  estimar: (token: string, origem: Ponto, destino: Ponto, paradas: Ponto[] = [], sinal?: AbortSignal) =>
     pedir<Estimativa>('/viagens/estimativa', {
       metodo: 'POST', token, sinal,
-      corpo: { ...corpoViagem(origem, destino), comparar: true, explorar: true },
+      corpo: { ...corpoViagem(origem, destino), comparar: true, explorar: true,
+               paradas: paradas.map((p) => ({ lat: p.lat, lon: p.lon })) },
     }),
 
   // ---- motorista
@@ -133,14 +134,22 @@ export const api = {
 
   // ---- corrida
   pedirCorrida: (token: string, origem: Lugar, destino: Lugar,
-                 { categoria = 'economico', formaPagamento = 'pix' }: { categoria?: IdCategoria; formaPagamento?: FormaPagamento } = {}) =>
+                 { categoria = 'economico', formaPagamento = 'pix', paradas = [] }:
+                 { categoria?: IdCategoria; formaPagamento?: FormaPagamento; paradas?: Lugar[] } = {}) =>
     pedir<Corrida>('/corridas', {
       metodo: 'POST', token,
       corpo: {
         ...corpoViagem(origem, destino), categoria, forma_pagamento: formaPagamento,
         origem_texto: textoDoLugar(origem), destino_texto: textoDoLugar(destino),
+        paradas: paradas.map((p) => ({ lat: p.lat, lon: p.lon, texto: textoDoLugar(p) })),
       },
     }),
+  mensagens: (token: string, id: number) => pedir<Mensagem[]>(`/corridas/${id}/mensagens`, { token }),
+  enviarMensagem: (token: string, id: number, texto: string) =>
+    pedir<Mensagem>(`/corridas/${id}/mensagens`, { metodo: 'POST', token, corpo: { texto } }),
+  compartilhar: (token: string, id: number) => pedir<Corrida>(`/corridas/${id}/compartilhar`, { metodo: 'POST', token }),
+  // Público: sem token. É o link que o passageiro manda para a família.
+  acompanhar: (codigo: string) => pedir<Acompanhamento>(`/publico/acompanhar/${encodeURIComponent(codigo)}`),
   historico: (token: string, antesDe?: number) =>
     pedir<ItemHistorico[]>(`/corridas?limite=20${antesDe ? `&antes_de=${antesDe}` : ''}`, { token }),
   avaliar: (token: string, id: number, nota: number, comentario?: string) =>

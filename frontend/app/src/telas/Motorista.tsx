@@ -10,6 +10,7 @@ import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Odometro, TextoRevelado } from '../ui/Movimento'
 import { AvaliarCorrida, NotaMedia } from '../ui/Estrelas'
 import { Busca } from './Busca'
+import { TelaChat } from './Chat'
 import { TelaHistorico } from './Historico'
 import { TelaPerfil } from './Perfil'
 import {
@@ -17,6 +18,7 @@ import {
 } from './Comum'
 
 const VAZIO: LatLon[] = []
+const SEM_PARADAS: Ponto[] = []
 const SEM_SEMAFOROS: Semaforo[] = []
 const PASSOS_SIMULACAO = 90          // a simulação dura no máximo ~40 s
 const INTERVALO_SIMULACAO_MS = 450
@@ -57,7 +59,8 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [mostrarMalha, definirMostrarMalha] = useState(false)
   const [semTiles, definirSemTiles] = useState(false)
   const [resumo, definirResumo] = useState<ResumoMotorista | null>(null)
-  const [painel, definirPainel] = useState<'perfil' | 'historico' | null>(null)
+  const [painel, definirPainel] = useState<'perfil' | 'historico' | 'chat' | null>(null)
+  const [naoLidas, definirNaoLidas] = useState(0)
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const cronometro = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const ultimaSimulada = useRef<Ponto | null>(null)
@@ -65,6 +68,14 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   corridaIdRef.current = corridaId
 
   const aoVivo = useCorridaAoVivo(corridaId, token)
+
+  // Mensagem nova do passageiro com o chat fechado: conta como não lida.
+  useEffect(() => {
+    const m = aoVivo.mensagem
+    if (!m || m.autor_id === sessao.usuario_id) return
+    if (painel !== 'chat') { definirNaoLidas((n) => n + 1); vibrar([20, 40, 20]) }
+  }, [aoVivo.mensagem?.id])
+  useEffect(() => { definirNaoLidas(0) }, [corridaId])
   const estado: EstadoCorrida | null = aoVivo.estado ?? corrida?.estado ?? null
   const encerrada = estado != null && FINAIS.includes(estado)
   const indoAoDestino = estado === 'em_curso'
@@ -251,6 +262,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
             motorista={posicao}
             origem={fase !== 'fila' ? passageiro : null}
             destino={fase !== 'fila' ? destino : null}
+            paradas={fase !== 'fila' && corrida ? corrida.paradas : SEM_PARADAS}
             radar={fase === 'fila' && online ? posicao : null}
             rota={indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
             rotaMotorista={!indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
@@ -297,6 +309,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
         )}
         {fase === 'corrida' && corrida && (
           <CorridaMotorista corrida={corrida} estado={estado} enderecos={enderecos} trajeto={trajeto}
+                            naoLidas={naoLidas} abrirChat={() => { definirNaoLidas(0); definirPainel('chat') }}
                             conectado={aoVivo.conectado} simulacao={simulacao}
                             iniciarSimulacao={iniciarSimulacao} pararSimulacao={pararSimulacao}
                             agir={agir} ocupado={ocupado} erro={erro} />
@@ -349,6 +362,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
       <AnimatePresence>
         {painel === 'perfil' && <TelaPerfil key="perfil" token={token} perto={posicao ?? gps.posicao} aoFechar={() => definirPainel(null)} />}
         {painel === 'historico' && <TelaHistorico key="historico" token={token} tipo="motorista" aoFechar={() => definirPainel(null)} />}
+        {painel === 'chat' && corrida && corridaId && (
+          <TelaChat key="chat" token={token} corridaId={corridaId} euId={sessao.usuario_id} papel="motorista"
+                    outroNome={corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} novaMensagem={aoVivo.mensagem}
+                    aberto aoFechar={() => definirPainel(null)} />
+        )}
       </AnimatePresence>
 
       <Confete origem={confete} />
@@ -420,7 +438,9 @@ function Fila({ online, alternando, alternar, posicao, endereco, resumo, erro, g
   )
 }
 
-function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simulacao, iniciarSimulacao, pararSimulacao, agir, ocupado, erro }: {
+function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simulacao, iniciarSimulacao, pararSimulacao, agir, ocupado, erro,
+                           naoLidas, abrirChat }: {
+  naoLidas: number; abrirChat: () => void
   corrida: Corrida; estado: EstadoCorrida | null; enderecos: { origem?: Lugar; destino?: Lugar }; trajeto: Rota | null
   conectado: boolean; simulacao: { passo: number; total: number } | null; iniciarSimulacao: () => void
   pararSimulacao: () => void; agir: (a: AcaoCorrida) => void; ocupado: boolean; erro: string | null
@@ -442,6 +462,23 @@ function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simu
           <div><small>Destino</small><b>{enderecos.destino?.titulo ?? '…'}</b>{enderecos.destino?.detalhe && <span>{enderecos.destino.detalhe}</span>}</div>
         </div>
       </div>
+      {corrida.paradas.length > 0 && (
+        <div className="paradas-trajeto">
+          {corrida.paradas.map((p, i) => (
+            <div key={i} className="linha-parada"><span className="numero-parada">{i + 1}</span><b>{p.texto ?? 'Parada'}</b></div>
+          ))}
+        </div>
+      )}
+      {estado !== 'concluida' && (
+        <div className="acoes-corrida">
+          <motion.button className="acao-corrida" whileTap={{ scale: 0.95 }} onClick={abrirChat} style={{ gridColumn: '1 / -1' }}>
+            <Icone nome="chat" tamanho={17} /> Mensagem para {nome}
+            <AnimatePresence>
+              {naoLidas > 0 && <motion.span className="contador" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>{naoLidas}</motion.span>}
+            </AnimatePresence>
+          </motion.button>
+        </div>
+      )}
 
       <div className="estatisticas duas">
         <div className="estatistica">

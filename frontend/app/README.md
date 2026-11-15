@@ -56,6 +56,9 @@ src/
 | Perfil | Cor do avatar, nome, telefone, carro (motorista), nota média e locais salvos |
 | Suas viagens | Histórico com endereços, categoria, pagamento, valor e avaliação pendente |
 | Fim da corrida | Avaliação de 1 a 5 estrelas, com comentário opcional, dos dois lados |
+| Paradas | Até 3 entre a partida e o destino, numeradas no mapa; a rota e o preço passam por elas |
+| Chat | Mensagens durante a corrida, com respostas rápidas e contador de não lidas |
+| Compartilhar | Link `?acompanhar=…` que abre o carro no mapa sem login, até a corrida acabar |
 
 ## As animações, e o que cada uma representa
 

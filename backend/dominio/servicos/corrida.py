@@ -145,41 +145,72 @@ def passo_comum(*resultados, maximo=MAXIMO_PONTOS_EXPLORACAO):
     return max(1, -(-maior // maximo))             # teto da divisao
 
 
-def estimar_viagem(grafo, indice_nos, origem, destino, *, registro=None,
+MAXIMO_PARADAS = 3
+
+
+def rota_por_paradas(grafo, nos, alt=None):
+    """Caminho minimo que passa pelos `nos` NA ORDEM dada: (segundos, caminho).
+
+    Com a ordem fixa, o caminho minimo e exatamente a concatenacao dos
+    minimos de cada trecho: qualquer caminho valido se decompoe nos mesmos
+    trechos, e trocar um trecho pelo minimo dele so diminui o total. Por
+    isso basta um A* por trecho (com a heuristica apontando para o fim
+    DAQUELE trecho). O teste-oraculo confere contra o Dijkstra.
+    """
+    total, caminho = 0.0, [nos[0]]
+    for a, b in zip(nos, nos[1:]):
+        if a == b:
+            continue                     # parada no mesmo cruzamento: trecho vazio
+        segundos, trecho = calcular_rota(grafo, a, b, alt=alt)
+        total += segundos
+        caminho.extend(trecho[1:])
+    return total, caminho
+
+
+def _passo_da_soma(totais, maximo=MAXIMO_PONTOS_EXPLORACAO):
+    """Passo comum quando cada busca e a SOMA de varios trechos."""
+    maior = max(totais) if totais else 0
+    return max(1, -(-maior // maximo))
+
+
+def estimar_viagem(grafo, indice_nos, origem, destino, *, paradas=(), registro=None,
                    config=None, semaforos=frozenset(), comparar=False,
                    explorar=False, geometria=None, alt=None):
     """Previa da viagem, ANTES de pedir: rota, tempo, distancia e preco.
 
-    `origem`/`destino` sao (lat, lon) do endereco escolhido. Cada um e
-    ancorado ao cruzamento mais proximo pela quadtree, e o A* roda entre os
-    dois -- exatamente o calculo que o pedido de corrida fara depois.
+    `origem`/`destino` (e cada uma das `paradas`) sao (lat, lon) do endereco
+    escolhido. Cada ponto e ancorado ao cruzamento mais proximo pela
+    quadtree, e um A* roda por TRECHO (origem -> parada 1 -> ... -> destino)
+    -- exatamente o calculo que o pedido de corrida fara depois.
 
     Com `registro`, mede tambem o ETA REAL do motorista mais proximo (busca
-    reversa, a mesma do pareamento). Com `comparar`, roda o Dijkstra sobre o
-    mesmo par e devolve os dois contadores de nos expandidos: o custo tem de
-    ser identico (o Dijkstra e o oraculo), so o esforco muda.
+    reversa, a mesma do pareamento). Com `comparar`, roda o Dijkstra sobre os
+    mesmos trechos e devolve os dois contadores de nos expandidos: o custo tem
+    de ser identico (o Dijkstra e o oraculo), so o esforco muda.
 
     Com `explorar`, devolve tambem a frente de onda de cada busca (ver
-    `ordem_de_descoberta`), para o front desenhar o algoritmo trabalhando.
+    `ordem_de_descoberta`), trecho apos trecho, para o front desenhar o
+    algoritmo trabalhando.
     """
-    no_origem = indice_nos.mais_proximo(*origem)
-    no_destino = indice_nos.mais_proximo(*destino)
-    if no_origem is None or no_destino is None:
+    if len(paradas) > MAXIMO_PARADAS:
+        raise DestinoInalcancavel(f"no maximo {MAXIMO_PARADAS} paradas")
+    pontos_viagem = [origem, *paradas, destino]
+    nos = [indice_nos.mais_proximo(*p) for p in pontos_viagem]
+    if any(no is None for no in nos):
         raise DestinoInalcancavel("coordenadas fora da area coberta pela malha")
 
+    trechos = [(a, b) for a, b in zip(nos, nos[1:]) if a != b]
+    segundos, caminho, expandidos, buscas = 0.0, [nos[0]], 0, []
     inicio = time.perf_counter()
-    resultado = None
-    if no_origem == no_destino:
-        segundos, caminho, expandidos = 0.0, [no_origem], 0
-    else:
-        heuristica = (alt.heuristica(no_destino, origem=no_origem) if alt
-                      else heuristica_haversine(grafo, no_destino))
-        resultado = busca_caminho_minimo(grafo, no_origem, {no_destino}, h=heuristica)
-        if no_destino not in resultado.custos:
-            raise DestinoInalcancavel(f"sem rota de {no_origem} ate {no_destino}")
-        segundos = resultado.custos[no_destino]
-        caminho = reconstruir_caminho(resultado.anterior, no_origem, no_destino)
-        expandidos = resultado.nos_expandidos
+    for a, b in trechos:
+        heuristica = (alt.heuristica(b, origem=a) if alt else heuristica_haversine(grafo, b))
+        resultado = busca_caminho_minimo(grafo, a, {b}, h=heuristica)
+        if b not in resultado.custos:
+            raise DestinoInalcancavel(f"sem rota de {a} ate {b}")
+        segundos += resultado.custos[b]
+        caminho.extend(reconstruir_caminho(resultado.anterior, a, b)[1:])
+        expandidos += resultado.nos_expandidos
+        buscas.append(resultado)
     ms_a_estrela = (time.perf_counter() - inicio) * 1000
 
     metros = comprimento_metros(grafo, caminho, geometria)
@@ -197,39 +228,46 @@ def estimar_viagem(grafo, indice_nos, origem, destino, *, registro=None,
             "origem": haversine(*origem, *pontos[0]),
             "destino": haversine(*destino, *pontos[-1]),
         },
+        "paradas": [{"lat": lat, "lon": lon} for lat, lon in
+                    (grafo.coordenadas(no) for no in nos[1:-1])],
         "algoritmo": {
             "a_estrela": {"nos_expandidos": expandidos, "ms": round(ms_a_estrela, 1)},
             "heuristica": "alt" if alt else "haversine",
             "velocidade_max_kmh": round(grafo.velocidade_maxima_kmh(), 1),
             "nos_na_malha": len(grafo.nos),
+            "trechos": len(trechos),
         },
         "motoristas": None,
     }
-    oraculo = None
-    if comparar and no_origem != no_destino:
+    oraculos = []
+    if comparar and trechos:
         inicio = time.perf_counter()
-        oraculo = busca_caminho_minimo(grafo, no_origem, {no_destino})
+        custo_oraculo = 0.0
+        for a, b in trechos:
+            oraculo = busca_caminho_minimo(grafo, a, {b})
+            custo_oraculo += oraculo.custos[b]
+            oraculos.append(oraculo)
         saida["algoritmo"]["dijkstra"] = {
-            "nos_expandidos": oraculo.nos_expandidos,
+            "nos_expandidos": sum(o.nos_expandidos for o in oraculos),
             "ms": round((time.perf_counter() - inicio) * 1000, 1),
-            "mesmo_custo": abs(oraculo.custos[no_destino] - segundos) < 1e-6,
+            "mesmo_custo": abs(custo_oraculo - segundos) < 1e-6,
         }
 
     if explorar:
-        buscas = [b for b in (resultado, oraculo) if b is not None]
-        passo = passo_comum(*buscas) if buscas else 1
+        totais = [sum(len(b.distancias) for b in grupo) for grupo in (buscas, oraculos) if grupo]
+        passo = _passo_da_soma(totais) if totais else 1
         saida["exploracao"] = {
-            "a_estrela": ordem_de_descoberta(grafo, resultado, passo) if resultado else [],
+            "a_estrela": [p for b in buscas for p in ordem_de_descoberta(grafo, b, passo)],
         }
-        if oraculo is not None:
-            saida["exploracao"]["dijkstra"] = ordem_de_descoberta(grafo, oraculo, passo)
+        if oraculos:
+            saida["exploracao"]["dijkstra"] = [p for b in oraculos for p in ordem_de_descoberta(grafo, b, passo)]
 
     if registro is not None and config is not None:
-        lat, lon = grafo.coordenadas(no_origem)
+        lat, lon = grafo.coordenadas(nos[0])
         candidatos = registro.candidatos(lat, lon, config.raio_busca_m,
                                          config.max_candidatos)
         ranking = motoristas_mais_proximos(
-            grafo, no_origem, candidatos, limite_segundos=config.limite_matching_s,
+            grafo, nos[0], candidatos, limite_segundos=config.limite_matching_s,
         ) if candidatos else []
         saida["motoristas"] = {
             "proximos": len(candidatos),
@@ -295,15 +333,15 @@ def liberar_motorista(sessao, registro, motorista_id):
 # ----------------------------------------------------------------- fluxo
 
 def definir_rota(sessao, grafo, corrida, alt=None, geometria=None,
-                 categoria=CATEGORIA_PADRAO):
+                 categoria=CATEGORIA_PADRAO, paradas=()):
     """Calcula a rota da corrida e avanca o estado para `rota`.
 
     Os metros saem do TRACADO (`geometria`), exatamente como na previa: sem
     ela, numa malha contraida, cada curva viraria corda e a corrida cobraria
     menos do que o passageiro viu antes de confirmar.
     """
-    segundos, caminho = calcular_rota(grafo, corrida.no_origem, corrida.no_destino,
-                                      alt=alt)
+    nos = [corrida.no_origem, *paradas, corrida.no_destino]
+    segundos, caminho = rota_por_paradas(grafo, nos, alt=alt)
     corrida.custo_estimado = estimar_custo(
         segundos, comprimento_metros(grafo, caminho, geometria), categoria)
     transitar(sessao, corrida, E.ROTA)

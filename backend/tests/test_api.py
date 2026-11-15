@@ -786,6 +786,135 @@ def test_nota_fora_de_1_a_5_e_recusada():
                             headers=cabecalho(passageiro)).status_code == 422
 
 
+# ----------------------------------------------------------------- paradas
+
+PARADA_1 = (-23.5290, -46.6190)
+PARADA_2 = (-23.5260, -46.6150)
+
+
+def _estimar_com(token, paradas=(), origem=ORIGEM, destino=DESTINO):
+    return cliente.post("/viagens/estimativa", json={
+        "origem_lat": origem[0], "origem_lon": origem[1],
+        "destino_lat": destino[0], "destino_lon": destino[1], "comparar": True,
+        "paradas": [{"lat": lat, "lon": lon} for lat, lon in paradas],
+    }, headers=cabecalho(token))
+
+
+def test_rota_com_paradas_e_a_soma_dos_trechos():
+    """Com ordem fixa, o minimo e a soma dos minimos de cada trecho."""
+    token = novo_passageiro()
+    total = _estimar_com(token, [PARADA_1, PARADA_2]).json()
+    trechos = [_estimar_com(token, origem=a, destino=b).json()["segundos"]
+               for a, b in ((ORIGEM, PARADA_1), (PARADA_1, PARADA_2), (PARADA_2, DESTINO))]
+    assert abs(total["segundos"] - sum(trechos)) < 1e-6
+    assert total["algoritmo"]["trechos"] == 3 and len(total["paradas"]) == 2
+    assert total["algoritmo"]["dijkstra"]["mesmo_custo"] is True, "o oraculo confere cada trecho"
+    direto = _estimar_com(token).json()
+    assert total["segundos"] >= direto["segundos"] - 1e-6, "parada nunca encurta a viagem"
+
+
+def test_no_maximo_tres_paradas():
+    token = novo_passageiro()
+    assert _estimar_com(token, [PARADA_1] * 4).status_code == 422
+
+
+def test_corrida_com_paradas_guarda_a_ordem_e_passa_por_elas():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    sem = pedir_corrida(passageiro).json()
+    cliente.post(f"/corridas/{sem['id']}/cancelar", headers=cabecalho(passageiro))
+    novo_motorista()
+    corrida = pedir_corrida(passageiro, paradas=[
+        {"lat": PARADA_2[0], "lon": PARADA_2[1], "texto": "Padaria"},
+        {"lat": PARADA_1[0], "lon": PARADA_1[1], "texto": "Farmácia"}]).json()
+    assert [p["texto"] for p in corrida["paradas"]] == ["Padaria", "Farmácia"]
+    assert corrida["custo_estimado"] > sem["custo_estimado"]
+    rota = cliente.get(f"/corridas/{corrida['id']}/rota", headers=cabecalho(passageiro)).json()
+    estimativa = _estimar_com(passageiro, [PARADA_2, PARADA_1]).json()
+    assert abs(rota["segundos"] - estimativa["segundos"]) < 1e-6, "rota e previa sao o mesmo calculo"
+
+
+# -------------------------------------------------------------------- chat
+
+def test_chat_entre_passageiro_e_motorista():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro).json()
+    for token, texto in ((passageiro, "Estou de camiseta azul"), (motorista, "Chego em 2 min")):
+        r = cliente.post(f"/corridas/{corrida['id']}/mensagens", json={"texto": texto}, headers=cabecalho(token))
+        assert r.status_code == 201, r.text
+    lidas = cliente.get(f"/corridas/{corrida['id']}/mensagens", headers=cabecalho(motorista)).json()
+    assert [m["texto"] for m in lidas] == ["Estou de camiseta azul", "Chego em 2 min"]
+
+
+def test_chat_e_so_de_quem_esta_na_corrida():
+    passageiro, intruso = novo_passageiro(), novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro).json()
+    r = cliente.post(f"/corridas/{corrida['id']}/mensagens", json={"texto": "oi"}, headers=cabecalho(intruso))
+    assert r.status_code == 403
+    assert cliente.get(f"/corridas/{corrida['id']}/mensagens", headers=cabecalho(intruso)).status_code == 403
+
+
+def test_chat_fecha_quando_a_corrida_termina_e_recusa_vazio():
+    passageiro = novo_passageiro()
+    corrida = _corrida_concluida(passageiro)
+    assert cliente.post(f"/corridas/{corrida['id']}/mensagens", json={"texto": "oi"},
+                        headers=cabecalho(passageiro)).status_code == 409
+    passageiro2 = novo_passageiro()
+    novo_motorista()
+    outra = pedir_corrida(passageiro2).json()
+    assert cliente.post(f"/corridas/{outra['id']}/mensagens", json={"texto": "   "},
+                        headers=cabecalho(passageiro2)).status_code == 422
+
+
+# ------------------------------------------------------------ compartilhar
+
+def test_link_publico_mostra_so_o_minimo_e_sem_login():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro, destino_texto="Praça da Sé").json()
+    assert corrida["token_compartilhar"] is None
+    token = cliente.post(f"/corridas/{corrida['id']}/compartilhar",
+                         headers=cabecalho(passageiro)).json()["token_compartilhar"]
+    de_novo = cliente.post(f"/corridas/{corrida['id']}/compartilhar",
+                           headers=cabecalho(passageiro)).json()["token_compartilhar"]
+    assert token and len(token) >= 16 and token == de_novo, "compartilhar duas vezes da o mesmo link"
+    publico = cliente.get(f"/publico/acompanhar/{token}")          # sem cabecalho de login
+    assert publico.status_code == 200, publico.text
+    dados = publico.json()
+    assert dados["ativa"] and dados["destino_texto"] == "Praça da Sé"
+    assert dados["passageiro"] == "Passageiro", "so o primeiro nome"
+    assert dados["posicao_motorista"] is not None and len(dados["pontos"]) > 1
+    assert "@" not in publico.text, "nenhum email pode vazar no link publico"
+
+
+def test_link_encerrado_para_de_mostrar_posicao():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro).json()
+    token = cliente.post(f"/corridas/{corrida['id']}/compartilhar",
+                         headers=cabecalho(passageiro)).json()["token_compartilhar"]
+    for acao in ("iniciar", "finalizar", "pagamento"):
+        cliente.post(f"/corridas/{corrida['id']}/{acao}", headers=cabecalho(passageiro))
+    dados = cliente.get(f"/publico/acompanhar/{token}").json()
+    assert dados["estado"] == "paga" and not dados["ativa"]
+    assert dados["posicao_motorista"] is None and dados["pontos"] == []
+
+
+def test_so_o_passageiro_compartilha_e_token_falso_da_404():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro).json()
+    assert cliente.post(f"/corridas/{corrida['id']}/compartilhar",
+                        headers=cabecalho(motorista)).status_code == 403
+    cliente.post(f"/corridas/{corrida['id']}/compartilhar", headers=cabecalho(passageiro))
+    visto_pelo_motorista = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(motorista)).json()
+    assert visto_pelo_motorista["token_compartilhar"] is None
+    for falso in ("abc", "x" * 22):
+        assert cliente.get(f"/publico/acompanhar/{falso}").status_code == 404
+
+
 def main():
     global cliente
     testes = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

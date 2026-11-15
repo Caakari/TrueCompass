@@ -75,6 +75,10 @@ class Corrida(Base):
     forma_pagamento: Mapped[str | None] = mapped_column(String(12), nullable=True)
     origem_texto: Mapped[str | None] = mapped_column(String(200), nullable=True)
     destino_texto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Link publico de acompanhamento (None = nao compartilhada). Aleatorio,
+    # nao derivado do id: quem tem o link de uma corrida nao adivinha outra.
+    token_compartilhar: Mapped[str | None] = mapped_column(String(40), nullable=True,
+                                                           unique=True, index=True)
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
     atualizada_em: Mapped[datetime] = mapped_column(DateTime, default=agora,
                                                     onupdate=agora)
@@ -144,4 +148,34 @@ class Avaliacao(Base):
     avaliado_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
     nota: Mapped[int] = mapped_column(Integer)
     comentario: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class CorridaParada(Base):
+    """Parada no caminho, na ordem em que o passageiro a quer.
+
+    Tabela propria (e nao colunas em `corridas`) porque sao de 0 a N. O no
+    ancorado fica gravado: a rota da corrida e recalculada a partir dele.
+    """
+
+    __tablename__ = "corrida_paradas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    corrida_id: Mapped[int] = mapped_column(ForeignKey("corridas.id"), index=True)
+    ordem: Mapped[int] = mapped_column(Integer)
+    no: Mapped[int] = mapped_column(BigInteger)
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    texto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class Mensagem(Base):
+    """Mensagem do chat da corrida, entre passageiro e motorista."""
+
+    __tablename__ = "mensagens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    corrida_id: Mapped[int] = mapped_column(ForeignKey("corridas.id"), index=True)
+    autor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    texto: Mapped[str] = mapped_column(String(500))
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)

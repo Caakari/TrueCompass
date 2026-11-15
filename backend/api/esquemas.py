@@ -37,6 +37,18 @@ class DisponibilidadeEntrada(BaseModel):
     disponivel: bool
 
 
+class ParadaEntrada(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    texto: str | None = Field(default=None, max_length=200)
+
+
+class ParadaSaida(BaseModel):
+    lat: float
+    lon: float
+    texto: str | None = None
+
+
 class CorridaEntrada(BaseModel):
     origem_lat: float = Field(ge=-90, le=90)
     origem_lon: float = Field(ge=-180, le=180)
@@ -50,6 +62,8 @@ class CorridaEntrada(BaseModel):
     # Enderecos como o passageiro os viu, para o historico.
     origem_texto: str | None = Field(default=None, max_length=200)
     destino_texto: str | None = Field(default=None, max_length=200)
+    # Paradas no caminho, NA ORDEM. Teto de 3, como nos apps de corrida.
+    paradas: list[ParadaEntrada] = Field(default_factory=list, max_length=3)
 
 
 class CorridaSaida(BaseModel):
@@ -78,6 +92,9 @@ class CorridaSaida(BaseModel):
     destino_texto: str | None = None
     # A nota que QUEM PERGUNTA deu nesta corrida (None = ainda nao avaliou).
     minha_avaliacao: int | None = None
+    paradas: list[ParadaSaida] = []
+    # So o passageiro ve o token: e ele quem decide com quem compartilhar.
+    token_compartilhar: str | None = None
     origem: tuple[float, float] | None = None       # cruzamento de embarque
     destino: tuple[float, float] | None = None
 
@@ -158,3 +175,39 @@ class HistoricoItem(BaseModel):
 class AvaliacaoEntrada(BaseModel):
     nota: int = Field(ge=1, le=5)
     comentario: str | None = Field(default=None, max_length=280)
+
+
+# -------------------------------------------------------------------- chat
+
+class MensagemEntrada(BaseModel):
+    texto: str = Field(min_length=1, max_length=500)
+
+
+class MensagemSaida(BaseModel):
+    id: int
+    autor_id: int
+    texto: str
+    criada_em: datetime | None = None
+
+
+# ------------------------------------------------- acompanhamento publico
+
+class AcompanhamentoSaida(BaseModel):
+    """O que um link compartilhado mostra, sem login.
+
+    De proposito, o MINIMO para quem acompanha: primeiro nome, carro, placa,
+    posicao e trajeto. Nada de email, telefone, sobrenome ou historico.
+    """
+    estado: str
+    ativa: bool
+    passageiro: str | None = None           # primeiro nome
+    motorista: str | None = None            # primeiro nome
+    carro: str | None = None
+    placa: str | None = None
+    posicao_motorista: tuple[float, float] | None = None
+    origem: tuple[float, float] | None = None
+    destino: tuple[float, float] | None = None
+    destino_texto: str | None = None
+    paradas: list[ParadaSaida] = []
+    pontos: list[tuple[float, float]] = []
+    segundos_restantes: float | None = None

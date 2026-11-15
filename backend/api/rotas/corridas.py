@@ -7,6 +7,8 @@ e nao `async def`. Dijkstra e A* sao CPU-bound e seguram o GIL; num
 ficaria parada. Com `def`, o FastAPI os executa num threadpool.
 """
 
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,13 +16,13 @@ from sqlalchemy.orm import Session
 from api.deps import (config, obter_alt, obter_conexoes, obter_geometria, obter_grafo,
                       obter_indice_nos, obter_registro, usuario_atual)
 from api.esquemas import (AvaliacaoEntrada, CorridaEntrada, CorridaSaida, HistoricoItem,
-                          RotaSaida)
-from api.eventos import comitar_e_publicar
+                          MensagemEntrada, MensagemSaida, ParadaSaida, RotaSaida)
+from api.eventos import comitar_e_publicar, mensagem_chat
 from dominio import estados as E
 from dominio.servicos import avaliacao as avaliacoes
 from dominio.servicos import corrida as servico
 from infra.banco import obter_sessao
-from infra.modelos import Corrida, Motorista, Usuario
+from infra.modelos import Corrida, CorridaParada, Mensagem, Motorista, Usuario
 
 rotas = APIRouter(prefix="/corridas", tags=["corridas"])
 
@@ -46,6 +48,12 @@ def corridas_concluidas(sessao, motorista_id):
             .scalar()) or 0
 
 
+def paradas_da_corrida(sessao, corrida_id):
+    """Paradas na ordem pedida."""
+    return (sessao.query(CorridaParada).filter_by(corrida_id=corrida_id)
+            .order_by(CorridaParada.ordem).all())
+
+
 def _saida(sessao, corrida, grafo, usuario=None):
     """CorridaSaida com o que o app mostra no card: nomes, placa, notas, pontos.
 
@@ -67,6 +75,10 @@ def _saida(sessao, corrida, grafo, usuario=None):
                 sessao, motorista.usuario_id)
     if usuario is not None:
         saida.minha_avaliacao = avaliacoes.nota_dada(sessao, corrida.id, usuario.id)
+    saida.paradas = [ParadaSaida(lat=p.lat, lon=p.lon, texto=p.texto)
+                     for p in paradas_da_corrida(sessao, corrida.id)]
+    if usuario is None or usuario.id != corrida.passageiro_id:
+        saida.token_compartilhar = None
     for campo, no in (("origem", corrida.no_origem), ("destino", corrida.no_destino)):
         if no in grafo.nos:
             setattr(saida, campo, grafo.coordenadas(no))
@@ -102,7 +114,8 @@ def pedir_corrida(dados: CorridaEntrada,
 
     origem = indice_nos.mais_proximo(dados.origem_lat, dados.origem_lon)
     destino = indice_nos.mais_proximo(dados.destino_lat, dados.destino_lon)
-    if origem is None or destino is None:
+    nos_paradas = [indice_nos.mais_proximo(p.lat, p.lon) for p in dados.paradas]
+    if origem is None or destino is None or None in nos_paradas:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
                             "coordenadas fora da area coberta pela malha")
 
@@ -113,11 +126,15 @@ def pedir_corrida(dados: CorridaEntrada,
                       destino_texto=(dados.destino_texto or "").strip() or None)
     sessao.add(corrida)
     sessao.flush()
+    for ordem, (parada, no) in enumerate(zip(dados.paradas, nos_paradas)):
+        sessao.add(CorridaParada(corrida_id=corrida.id, ordem=ordem, no=no,
+                                 lat=parada.lat, lon=parada.lon,
+                                 texto=(parada.texto or "").strip() or None))
 
     try:
         servico.alocar_motorista(sessao, grafo, registro, corrida, cfg)
         servico.definir_rota(sessao, grafo, corrida, alt=alt, geometria=geometria,
-                             categoria=dados.categoria)
+                             categoria=dados.categoria, paradas=nos_paradas)
     except servico.SemMotoristaDisponivel as erro:
         _transitar_ou_409(sessao, corrida, E.CANCELADA)
         comitar_e_publicar(sessao, conexoes, corrida)
@@ -143,11 +160,12 @@ def consultar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
 def obter_rota(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
                sessao: Session = Depends(obter_sessao), grafo=Depends(obter_grafo),
                alt=Depends(obter_alt), geometria=Depends(obter_geometria)):
-    """Traçado para o Leaflet desenhar. A* com heuristica haversine."""
+    """Traçado para o Leaflet desenhar: A* trecho a trecho, pelas paradas."""
     corrida = _carregar(sessao, corrida_id, usuario)
+    nos = [corrida.no_origem, *(p.no for p in paradas_da_corrida(sessao, corrida.id)),
+           corrida.no_destino]
     try:
-        segundos, caminho = servico.calcular_rota(grafo, corrida.no_origem,
-                                                  corrida.no_destino, alt=alt)
+        segundos, caminho = servico.rota_por_paradas(grafo, nos, alt=alt)
     except servico.DestinoInalcancavel as erro:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(erro))
     return RotaSaida(segundos=segundos,
@@ -289,4 +307,63 @@ def avaliar(corrida_id: int, dados: AvaliacaoEntrada,
     except avaliacoes.AvaliacaoInvalida as erro:
         raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
     sessao.commit()
+    return _saida(sessao, corrida, grafo, usuario)
+
+
+# -------------------------------------------------------------------- chat
+
+# O chat vale enquanto os dois lados ainda precisam se encontrar ou estao
+# juntos; depois do fim, a conversa vira historico e fica so leitura.
+ESTADOS_COM_CHAT = (E.ALOCACAO, E.ROTA, E.EM_CURSO)
+
+
+@rotas.get("/{corrida_id}/mensagens", response_model=list[MensagemSaida])
+def listar_mensagens(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
+                     sessao: Session = Depends(obter_sessao)):
+    corrida = _carregar(sessao, corrida_id, usuario)
+    return [MensagemSaida.model_validate(m, from_attributes=True)
+            for m in sessao.query(Mensagem).filter_by(corrida_id=corrida.id)
+            .order_by(Mensagem.id).limit(500)]
+
+
+@rotas.post("/{corrida_id}/mensagens", response_model=MensagemSaida,
+            status_code=status.HTTP_201_CREATED)
+def enviar_mensagem(corrida_id: int, dados: MensagemEntrada,
+                    usuario: Usuario = Depends(usuario_atual),
+                    sessao: Session = Depends(obter_sessao),
+                    conexoes=Depends(obter_conexoes)):
+    """Grava e SO DEPOIS publica no WebSocket da corrida (mesma regra do estado)."""
+    corrida = _carregar(sessao, corrida_id, usuario)
+    if corrida.estado not in ESTADOS_COM_CHAT:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"o chat fecha quando a corrida termina (estado: {corrida.estado})")
+    texto = dados.texto.strip()
+    if not texto:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "mensagem vazia")
+    mensagem = Mensagem(corrida_id=corrida.id, autor_id=usuario.id, texto=texto)
+    sessao.add(mensagem)
+    sessao.commit()
+    saida = MensagemSaida.model_validate(mensagem, from_attributes=True)
+    conexoes.publicar(corrida.id, mensagem_chat(corrida.id, saida.model_dump(mode="json")))
+    return saida
+
+
+# ------------------------------------------------------------ compartilhar
+
+@rotas.post("/{corrida_id}/compartilhar", response_model=CorridaSaida)
+def compartilhar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
+                 sessao: Session = Depends(obter_sessao), grafo=Depends(obter_grafo)):
+    """Gera (uma vez) o token do link publico. Pedir de novo devolve o mesmo.
+
+    So o passageiro compartilha: a viagem e dele. O token e aleatorio
+    (`secrets`), e nao derivado do id, para nao ser adivinhavel.
+    """
+    corrida = _carregar(sessao, corrida_id, usuario)
+    if usuario.id != corrida.passageiro_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "so o passageiro compartilha a viagem")
+    if corrida.estado in E.ESTADOS_FINAIS:
+        raise HTTPException(status.HTTP_409_CONFLICT, "a corrida ja terminou")
+    if corrida.token_compartilhar is None:
+        corrida.token_compartilhar = secrets.token_urlsafe(16)
+        sessao.commit()
     return _saida(sessao, corrida, grafo, usuario)

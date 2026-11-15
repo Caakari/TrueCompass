@@ -3,6 +3,7 @@ import { useEffect, useState, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { api, definirAoExpirar } from './api'
 import { gravarArmazenado, lerArmazenado, movimentoReduzido } from './lib/util'
+import { Acompanhar } from './telas/Acompanhar'
 import { Entrada } from './telas/Entrada'
 import { Motorista } from './telas/Motorista'
 import { Passageiro } from './telas/Passageiro'
@@ -21,7 +22,14 @@ type DocumentoComTransicao = Document & {
   startViewTransition?: (atualizar: () => void) => { ready: Promise<void> }
 }
 
+/** Código do link público de acompanhamento (?acompanhar=...), se houver. */
+function codigoDeAcompanhamento(): string | null {
+  try { return new URLSearchParams(window.location.search).get('acompanhar') } catch { return null }
+}
+
 export default function App() {
+  // Link compartilhado: abre direto o acompanhamento, sem login.
+  const [codigo] = useState(codigoDeAcompanhamento)
   const [sessao, definirSessao] = useState<Sessao | null>(() => lerArmazenado<Sessao>(CHAVE_SESSAO))
   const [tema, definirTema] = useState<Tema>(temaInicial)
   const [malha, definirMalha] = useState<Malha | null>(null)
@@ -89,7 +97,8 @@ export default function App() {
     definirSessao(null)
   }
 
-  const tela = !sessao ? 'entrada' : !malha ? (falhaBackend ? 'entrada' : 'carregando') : sessao.tipo
+  const tela = codigo ? 'acompanhar'
+    : !sessao ? 'entrada' : !malha ? (falhaBackend ? 'entrada' : 'carregando') : sessao.tipo
 
   return (
     <div className="aplicativo">
@@ -99,6 +108,7 @@ export default function App() {
       <AnimatePresence initial={false}>
         <motion.div key={tela} className="tela" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+          {tela === 'acompanhar' && codigo && <Acompanhar codigo={codigo} tema={tema} />}
           {tela === 'entrada' && <Entrada centro={malha?.centro ?? null} falhaBackend={falhaBackend} aoEntrar={aoEntrar} />}
           {tela === 'carregando' && (
             <div className="tela-carregando">

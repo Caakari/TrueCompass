@@ -10,6 +10,8 @@ distancia e preco -- calculado pelo MESMO A* que o pedido usara depois.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from api.esquemas import ParadaEntrada
+
 from api.deps import (config, obter_alt, obter_geometria, obter_grafo, obter_indice_nos,
                       obter_nos_semaforizados, obter_registro, usuario_atual)
 from dominio.servicos import corrida as servico
@@ -26,6 +28,7 @@ class EstimativaEntrada(BaseModel):
                            description="roda tambem o Dijkstra, como oraculo")
     explorar: bool = Field(default=False,
                            description="devolve a frente de onda de cada busca")
+    paradas: list[ParadaEntrada] = Field(default_factory=list, max_length=3)
 
 
 @rotas.post("/estimativa")
@@ -43,6 +46,7 @@ def estimativa(dados: EstimativaEntrada,
             grafo, indice_nos,
             (dados.origem_lat, dados.origem_lon),
             (dados.destino_lat, dados.destino_lon),
+            paradas=[(p.lat, p.lon) for p in dados.paradas],
             registro=registro, config=cfg, semaforos=semaforos,
             comparar=dados.comparar, explorar=dados.explorar,
             geometria=geometria, alt=alt,

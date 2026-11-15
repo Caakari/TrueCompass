@@ -104,7 +104,11 @@ export function Busca({
         </motion.div>
       </div>
 
-      <motion.div layoutId="caixa-busca" className={`busca-campos ${campos.length > 1 ? 'duplos' : ''}`}
+      {/* A caixa "voa" da folha para cá (layoutId) só na busca da VIAGEM. Nas
+          outras (parada, local salvo, posição), o par compartilhado com o
+          resumo do trajeto prendia a saída da folha, e a fase seguinte não entrava. */}
+      <motion.div layoutId={campos.length > 1 ? 'caixa-busca' : undefined}
+                  className={`busca-campos ${campos.length > 1 ? 'duplos' : ''}`}
                   transition={{ type: 'spring', stiffness: 380, damping: 34 }}>
         {campos.length > 1 && (
           <div className="busca-trilho" aria-hidden="true">
