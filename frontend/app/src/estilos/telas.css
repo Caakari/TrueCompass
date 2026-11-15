@@ -105,3 +105,23 @@
   .entrada-form { flex: 0 0 auto; width: 430px; border-radius: 26px; border: 1px solid var(--linha); box-shadow: var(--sombra); margin-bottom: 40px; }
   .tela-busca { left: 16px; right: auto; top: 16px; bottom: 16px; width: 420px; border-radius: 24px; overflow: hidden; padding-top: 0; box-shadow: var(--sombra); border: 1px solid var(--linha); }
 }
+
+/* ================================ painel do motorista, estilo app de corrida */
+.botao-go {
+  align-self: center; width: 92px; height: 92px; border-radius: 50%; border: 0; margin: -4px 0 2px;
+  display: grid; place-items: center; font: 800 17px 'Space Grotesk', sans-serif; letter-spacing: .3px;
+  background: radial-gradient(circle at 35% 30%, var(--verde-claro), var(--verde)); color: var(--verde-sobre);
+  box-shadow: 0 0 0 6px var(--verde-dim), 0 16px 30px -12px var(--verde-brilho);
+}
+.botao-go.ligado { background: var(--cartao-alto); color: var(--texto); box-shadow: 0 0 0 6px var(--linha); }
+.botao-go:disabled { opacity: .5; }
+.status-motorista { display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 18px 'Space Grotesk', sans-serif; }
+.status-motorista .ponto { color: var(--texto-fraco); }
+.status-motorista.online .ponto { color: var(--verde); }
+.status-motorista-apoio { text-align: center; font-size: 13px; color: var(--texto-dim); margin-top: -8px; }
+.ganhos-dia { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ganhos-dia div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: var(--cartao-alto); }
+.ganhos-dia b { font: 700 16px 'Space Grotesk', sans-serif; }
+.ganhos-dia span { font-size: 11.5px; color: var(--texto-dim); }
+.chegada-detalhes { display: flex; gap: 14px; font-size: 13px; color: var(--texto-dim); }
+.chegada-detalhes b { color: var(--texto); }

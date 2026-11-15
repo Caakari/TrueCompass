@@ -8,6 +8,7 @@ ficaria parada. Com `def`, o FastAPI os executa num threadpool.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.deps import (config, obter_alt, obter_conexoes, obter_geometria, obter_grafo,
@@ -35,6 +36,14 @@ def _carregar(sessao, corrida_id, usuario):
     return corrida
 
 
+def corridas_concluidas(sessao, motorista_id):
+    """Corridas que o motorista levou ate o fim (concluidas ou ja pagas)."""
+    return (sessao.query(func.count(Corrida.id))
+            .filter(Corrida.motorista_id == motorista_id,
+                    Corrida.estado.in_((E.CONCLUIDA, E.PAGA)))
+            .scalar()) or 0
+
+
 def _saida(sessao, corrida, grafo):
     """CorridaSaida com o que o app mostra no card: nomes, placa, pontos."""
     saida = CorridaSaida.model_validate(corrida, from_attributes=True)
@@ -46,6 +55,7 @@ def _saida(sessao, corrida, grafo):
             saida.motorista_placa = motorista.placa
             saida.motorista_modelo = motorista.modelo or None
             saida.motorista_nome = motorista.usuario.nome if motorista.usuario else None
+            saida.motorista_corridas = corridas_concluidas(sessao, motorista.id)
     for campo, no in (("origem", corrida.no_origem), ("destino", corrida.no_destino)):
         if no in grafo.nos:
             setattr(saida, campo, grafo.coordenadas(no))
@@ -70,6 +80,7 @@ def pedir_corrida(dados: CorridaEntrada,
                   sessao: Session = Depends(obter_sessao),
                   grafo=Depends(obter_grafo),
                   alt=Depends(obter_alt),
+                  geometria=Depends(obter_geometria),
                   indice_nos=Depends(obter_indice_nos),
                   registro=Depends(obter_registro),
                   conexoes=Depends(obter_conexoes),
@@ -91,7 +102,8 @@ def pedir_corrida(dados: CorridaEntrada,
 
     try:
         servico.alocar_motorista(sessao, grafo, registro, corrida, cfg)
-        servico.definir_rota(sessao, grafo, corrida, alt=alt)
+        servico.definir_rota(sessao, grafo, corrida, alt=alt, geometria=geometria,
+                             categoria=dados.categoria)
     except servico.SemMotoristaDisponivel as erro:
         _transitar_ou_409(sessao, corrida, E.CANCELADA)
         comitar_e_publicar(sessao, conexoes, corrida)

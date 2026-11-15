@@ -21,6 +21,20 @@ TARIFA_BASE = 5.00
 POR_MINUTO = 0.80
 POR_KM = 1.90
 
+# Categorias de viagem. O multiplicador incide sobre a tarifa INTEIRA (base,
+# tempo e distancia): a rota e a mesma, so muda o carro. No prototipo todo
+# motorista atende todas as categorias -- por isso o tempo de chegada do
+# motorista e o mesmo nos tres cartoes, e isso e dito, nao escondido.
+CATEGORIA_PADRAO = "economico"
+CATEGORIAS = {
+    "economico": {"nome": "Econômico", "lugares": 4, "fator": 1.00,
+                  "descricao": "Viagens do dia a dia"},
+    "conforto": {"nome": "Conforto", "lugares": 4, "fator": 1.35,
+                 "descricao": "Carros mais novos e espaçosos"},
+    "grande": {"nome": "Grande", "lugares": 6, "fator": 1.60,
+               "descricao": "Para grupos, até 6 pessoas"},
+}
+
 
 class SemMotoristaDisponivel(Exception):
     pass
@@ -87,8 +101,17 @@ def comprimento_metros(grafo, caminho, geometria=None):
     return (geometria or SEM_GEOMETRIA).comprimento_m(grafo, caminho)
 
 
-def estimar_custo(segundos, metros):
-    return round(TARIFA_BASE + POR_MINUTO * (segundos / 60) + POR_KM * (metros / 1000), 2)
+def estimar_custo(segundos, metros, categoria=CATEGORIA_PADRAO):
+    """Tarifa = (base + por minuto + por km) x fator da categoria."""
+    base = TARIFA_BASE + POR_MINUTO * (segundos / 60) + POR_KM * (metros / 1000)
+    return round(base * CATEGORIAS[categoria]["fator"], 2)
+
+
+def opcoes_de_viagem(segundos, metros):
+    """Os cartoes de categoria da previa, do mais barato ao mais caro."""
+    return [{"id": chave, "nome": c["nome"], "lugares": c["lugares"],
+             "descricao": c["descricao"], "custo": estimar_custo(segundos, metros, chave)}
+            for chave, c in CATEGORIAS.items()]
 
 
 MAXIMO_PONTOS_EXPLORACAO = 2500
@@ -165,6 +188,7 @@ def estimar_viagem(grafo, indice_nos, origem, destino, *, registro=None,
         "segundos": segundos,
         "metros": metros,
         "custo_estimado": estimar_custo(segundos, metros),
+        "categorias": opcoes_de_viagem(segundos, metros),
         "pontos": pontos,
         "semaforos_no_caminho": sum(1 for no in caminho if no in semaforos),
         # Quanto o endereco esta do cruzamento onde a rota comeca/termina:
@@ -270,11 +294,18 @@ def liberar_motorista(sessao, registro, motorista_id):
 
 # ----------------------------------------------------------------- fluxo
 
-def definir_rota(sessao, grafo, corrida, alt=None):
-    """Calcula a rota da corrida e avanca o estado para `rota`."""
+def definir_rota(sessao, grafo, corrida, alt=None, geometria=None,
+                 categoria=CATEGORIA_PADRAO):
+    """Calcula a rota da corrida e avanca o estado para `rota`.
+
+    Os metros saem do TRACADO (`geometria`), exatamente como na previa: sem
+    ela, numa malha contraida, cada curva viraria corda e a corrida cobraria
+    menos do que o passageiro viu antes de confirmar.
+    """
     segundos, caminho = calcular_rota(grafo, corrida.no_origem, corrida.no_destino,
                                       alt=alt)
-    corrida.custo_estimado = estimar_custo(segundos, comprimento_metros(grafo, caminho))
+    corrida.custo_estimado = estimar_custo(
+        segundos, comprimento_metros(grafo, caminho, geometria), categoria)
     transitar(sessao, corrida, E.ROTA)
     return segundos, caminho
 

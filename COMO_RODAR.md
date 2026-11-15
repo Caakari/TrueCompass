@@ -34,7 +34,7 @@ python3 matematica/tests/test_contracao.py    # 14 — contração da malha
 python3 matematica/tests/test_matriz.py       # 29 — matriz do mapa e semáforos
 python3 backend/tests/test_osm.py             # 28 — parser OpenStreetMap
 python3 backend/tests/test_estados.py         # 18 — Kahn e DAG da corrida
-python3 backend/tests/test_api.py             # 37 — ciclo completo via HTTP
+python3 backend/tests/test_api.py             # 45 — ciclo completo via HTTP
 python3 backend/tests/test_ws.py              # 14 — tempo real
 ```
 

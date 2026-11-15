@@ -20,10 +20,13 @@ export interface Margens { base: number; esquerda: number }
  *   rota só na parte visível.
  * - Em tela larga vira painel lateral flutuante: o mesmo app, com espaço.
  */
-export function Folha({ children, chave, aoMedir, recolher = 0 }: {
+export function Folha({ children, chave, aoMedir, recolher = 0, fracaoMaxima }: {
   children: ReactNode; chave: string; aoMedir: (m: Margens) => void
   /** Cada incremento recolhe a folha (ex.: para mostrar algo no mapa). */
   recolher?: number
+  /** Teto da altura (fração da tela) no celular. Na escolha da viagem a
+   *  folha para em ~2/3 e o resto rola: a rota precisa caber no mapa. */
+  fracaoMaxima?: number
 }) {
   const larga = useTelaLarga()
   const conteudoRef = useRef<HTMLDivElement>(null)
@@ -48,7 +51,7 @@ export function Folha({ children, chave, aoMedir, recolher = 0 }: {
     return () => window.removeEventListener('resize', aoRedimensionar)
   }, [])
 
-  const maxima = Math.round(alturaJanela * (larga ? 0.88 : 0.84))
+  const maxima = Math.round(alturaJanela * (larga ? 0.88 : fracaoMaxima ?? 0.84))
   const altura = Math.min(alturaConteudo, maxima)
   const curso = Math.max(0, altura - ESPIAR_PX)
 

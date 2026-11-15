@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.deps import (motorista_atual, obter_conexoes, obter_indice_nos,
@@ -8,7 +11,11 @@ from api.esquemas import DisponibilidadeEntrada, PosicaoEntrada
 from api.eventos import mensagem_posicao
 from dominio import estados as E
 from infra.banco import obter_sessao
-from infra.modelos import Corrida, Motorista
+from infra.modelos import Corrida, Motorista, Pagamento
+
+# Sao Paulo: UTC-3 o ano todo (o horario de verao acabou em 2019). Offset fixo
+# em vez de zoneinfo para nao depender do tzdata da imagem do deploy.
+FUSO_SP = timezone(timedelta(hours=-3))
 
 # Estados em que o motorista esta comprometido com uma corrida e o passageiro
 # quer ver o carro se mexendo no mapa.
@@ -57,3 +64,32 @@ def definir_disponibilidade(dados: DisponibilidadeEntrada,
     sessao.commit()
     registro.definir_disponibilidade(motorista.id, dados.disponivel)
     return {"disponivel": dados.disponivel, "motoristas_online": len(registro)}
+
+
+def inicio_do_dia_utc(agora=None):
+    """Meia-noite de hoje em Sao Paulo, em UTC sem fuso (como o banco grava)."""
+    agora = agora or datetime.now(timezone.utc)
+    meia_noite = agora.astimezone(FUSO_SP).replace(hour=0, minute=0, second=0, microsecond=0)
+    return meia_noite.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+@rotas.get("/resumo")
+def resumo(motorista: Motorista = Depends(motorista_atual),
+           sessao: Session = Depends(obter_sessao)):
+    """Ganhos e corridas de HOJE, para o painel do motorista.
+
+    Sai dos pagamentos gravados, nao de uma conta no app: o valor so entra
+    depois que o passageiro paga -- a mesma regra do DAG (concluida -> paga).
+    """
+    inicio = inicio_do_dia_utc()
+    corridas, ganhos = (sessao.query(func.count(Pagamento.id), func.coalesce(func.sum(Pagamento.valor), 0.0))
+                        .join(Corrida, Corrida.id == Pagamento.corrida_id)
+                        .filter(Corrida.motorista_id == motorista.id,
+                                Pagamento.processado_em >= inicio)
+                        .one())
+    total = (sessao.query(func.count(Corrida.id))
+             .filter(Corrida.motorista_id == motorista.id,
+                     Corrida.estado.in_((E.CONCLUIDA, E.PAGA)))
+             .scalar()) or 0
+    return {"ganhos_hoje": round(float(ganhos), 2), "corridas_hoje": int(corridas),
+            "corridas_total": int(total)}

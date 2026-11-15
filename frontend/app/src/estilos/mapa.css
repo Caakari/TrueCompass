@@ -5,10 +5,12 @@
 .camada-onda { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; transition: opacity .15s; }
 
 .leaflet-container { background: var(--mapa-bg); font-family: 'Inter', sans-serif; outline: none; }
-/* Tiles do OSM: dessaturados no claro; invertidos no escuro (o OSM não tem
-   estilo escuro sem chave de API, e a inversão preserva ruas e rótulos). */
-.tiles-osm { filter: saturate(.45) contrast(.95) brightness(1.03); }
-:root[data-tema="escuro"] .tiles-osm { filter: invert(1) hue-rotate(180deg) saturate(.35) brightness(.78) contrast(.92); }
+/* Tiles do OSM em tons de cinza, como os mapas de app de corrida: o fundo
+   só dá contexto, e a única coisa colorida na tela é a rota. No escuro,
+   invertidos (o OSM não tem estilo escuro sem chave de API, e a inversão
+   preserva ruas e rótulos). */
+.tiles-osm { filter: grayscale(1) contrast(.86) brightness(1.08); }
+:root[data-tema="escuro"] .tiles-osm { filter: invert(1) grayscale(1) brightness(.72) contrast(.9); }
 .leaflet-control-attribution {
   margin-top: calc(var(--seguro-topo) + 132px) !important; margin-right: 8px !important;
   background: var(--vidro) !important; color: var(--texto-fraco) !important;

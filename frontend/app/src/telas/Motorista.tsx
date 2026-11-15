@@ -4,7 +4,7 @@ import { api, type AcaoCorrida } from '../api'
 import { useCorridaAoVivo, useLocalizacao } from '../ganchos'
 import { dentroDaCaixa, paraPonto, reais, rumoVerdadeiro, textoDuracao, vibrar } from '../lib/util'
 import { Mapa, type ApiMapa } from '../mapa/Mapa'
-import type { Corrida, EstadoCorrida, LatLon, Lugar, Malha, Ponto, Rota, Sessao, Tema } from '../tipos'
+import type { Corrida, EstadoCorrida, LatLon, Lugar, Malha, Ponto, ResumoMotorista, Rota, Semaforo, Sessao, Tema } from '../tipos'
 import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Odometro, TextoRevelado } from '../ui/Movimento'
@@ -14,6 +14,7 @@ import {
 } from './Comum'
 
 const VAZIO: LatLon[] = []
+const SEM_SEMAFOROS: Semaforo[] = []
 const PASSOS_SIMULACAO = 90          // a simulação dura no máximo ~40 s
 const INTERVALO_SIMULACAO_MS = 450
 const FINAIS: EstadoCorrida[] = ['paga', 'cancelada']
@@ -51,6 +52,8 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [busca, definirBusca] = useState(false)
   const [margens, definirMargens] = useState<Margens>({ base: 0, esquerda: 0 })
   const [mostrarMalha, definirMostrarMalha] = useState(false)
+  const [semTiles, definirSemTiles] = useState(false)
+  const [resumo, definirResumo] = useState<ResumoMotorista | null>(null)
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const cronometro = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const ultimaSimulada = useRef<Ponto | null>(null)
@@ -61,6 +64,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const estado: EstadoCorrida | null = aoVivo.estado ?? corrida?.estado ?? null
   const encerrada = estado != null && FINAIS.includes(estado)
   const indoAoDestino = estado === 'em_curso'
+
+  // Ganhos do dia: atualizados ao entrar e a cada corrida que termina.
+  useEffect(() => {
+    api.resumoDoMotorista(token).then(definirResumo).catch(() => {})
+  }, [corridaId === null, estado === 'paga'])
 
   const posicao: Ponto | null = posicaoSimulada ?? (usarGps && gpsNaArea ? gps.posicao : posicaoManual)
   const fase = !corridaId ? 'fila' : encerrada ? 'encerrada' : 'corrida'
@@ -229,7 +237,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const destino = corrida?.destino ? paraPonto(corrida.destino) : null
   const alvo = indoAoDestino ? destino : passageiro
   const rumo = posicao && alvo ? rumoVerdadeiro(posicao, alvo) : null
-  const titulo = fase === 'fila' ? (online ? 'Online' : 'Offline')
+  const titulo = fase === 'fila' ? (resumo ? `${reais(resumo.ganhos_hoje)} hoje` : null)
     : estado === 'em_curso' ? 'Em viagem' : estado === 'concluida' ? 'Aguardando pagamento'
     : fase === 'corrida' ? 'Indo buscar' : null
 
@@ -243,11 +251,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
             rota={indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
             rotaMotorista={!indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
             cometa={indoAoDestino}
-            semaforos={malha.semaforos}
-            mostrarMalha={mostrarMalha}
+            semaforos={mostrarMalha ? malha.semaforos : SEM_SEMAFOROS}
+            mostrarMalha={mostrarMalha || semTiles}
             margens={margens}
             aoClicar={aoClicarNoMapa}
-            aoFalharTiles={() => definirMostrarMalha(true)} />
+            aoFalharTiles={() => definirSemTiles(true)} />
 
       {/* Onda de choque ao ficar online: um anel que atravessa a tela. */}
       <AnimatePresence>
@@ -263,15 +271,12 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
                    <>
                      <CabecaMenu icone="carro" titulo="Motorista" detalhe={online ? 'disponível para corridas' : 'offline'} />
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
-                     <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha do algoritmo</ItemMenu>
+                     <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha e semáforos</ItemMenu>
                      <ItemMenu icone="sair" perigo onClick={() => { fechar(); sair() }}>Sair</ItemMenu>
                    </>
                  )} />
 
       <ControlesMapa base={margens.base}>
-        <BotaoRedondo rotulo="Mostrar a malha do algoritmo" ativo={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>
-          <Icone nome="camadas" />
-        </BotaoRedondo>
         <BotaoRedondo rotulo="Centralizar em mim" onClick={() => posicao && mapa.current?.voarPara(posicao, 16)}>
           <Icone nome="mira" />
         </BotaoRedondo>
@@ -279,7 +284,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
 
       <Folha chave={fase} aoMedir={definirMargens}>
         {fase === 'fila' && (
-          <Fila online={online} alternando={alternando} alternar={alternarOnline} posicao={posicao} endereco={endereco}
+          <Fila online={online} alternando={alternando} alternar={alternarOnline} posicao={posicao} endereco={endereco} resumo={resumo}
                 erro={erro} gpsFora={Boolean(gps.posicao && !gpsNaArea)} gpsNaArea={gpsNaArea} usarGps={usarGps && gpsNaArea}
                 ativarGps={() => { definirUsarGps(true); if (gps.posicao) mapa.current?.voarPara(gps.posicao, 16) }}
                 abrirBusca={() => definirBusca(true)} />
@@ -310,7 +315,10 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
               <Icone nome="carro" tamanho={40} traco={1.6} />
               <TextoRevelado className="titulo-folha" texto="Nova corrida!" />
               <span className="chegada-valor"><Odometro texto={reais(corrida.custo_estimado)} /></span>
-              <small>{corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} está esperando</small>
+              {corrida.eta_segundos != null && (
+                <span className="chegada-detalhes"><span>Embarque a <b>{textoDuracao(corrida.eta_segundos)}</b></span></span>
+              )}
+              <small>{corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} está esperando · toque para ver</small>
             </motion.div>
           </motion.div>
         )}
@@ -330,29 +338,37 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   )
 }
 
-function Fila({ online, alternando, alternar, posicao, endereco, erro, gpsFora, gpsNaArea, usarGps, ativarGps, abrirBusca }: {
+function Fila({ online, alternando, alternar, posicao, endereco, resumo, erro, gpsFora, gpsNaArea, usarGps, ativarGps, abrirBusca }: {
   online: boolean; alternando: boolean; alternar: () => void; posicao: Ponto | null; endereco: Lugar | null
-  erro: string | null; gpsFora: boolean; gpsNaArea: boolean; usarGps: boolean; ativarGps: () => void; abrirBusca: () => void
+  resumo: ResumoMotorista | null; erro: string | null; gpsFora: boolean; gpsNaArea: boolean; usarGps: boolean
+  ativarGps: () => void; abrirBusca: () => void
 }) {
   return (
     <div className="conteudo">
-      <div className="fila-cabeca">
-        <div>
-          <div className="saudacao">{online ? 'Você está na fila' : 'Você está offline'}</div>
-          <TextoRevelado as="h1" className="titulo-folha" texto={online ? 'Procurando passageiros' : 'Pronto para dirigir?'} />
-        </div>
-        <motion.button className={`botao-energia ${online ? 'ligado' : ''}`} onClick={() => { vibrar(10); alternar() }}
-                       disabled={alternando || !posicao} whileTap={{ scale: 0.85 }} whileHover={{ scale: 1.05 }}
-                       animate={online ? { boxShadow: ['0 0 0 0 var(--verde-brilho)', '0 0 0 18px transparent'] } : {}}
-                       transition={online ? { boxShadow: { duration: 1.6, repeat: Infinity } } : {}}
-                       aria-label={online ? 'Ficar offline' : 'Ficar online'}>
-          {alternando ? <span className="giro" /> : (
-            <motion.span animate={{ rotate: online ? 180 : 0 }} transition={{ type: 'spring', stiffness: 300, damping: 15 }}>
-              <Icone nome="energia" tamanho={30} traco={2.4} />
-            </motion.span>
-          )}
-        </motion.button>
+      {/* O botão grande e redondo dos apps de motorista: um toque, e você
+          entra (ou sai) da fila do pareamento. */}
+      <motion.button className={`botao-go ${online ? 'ligado' : ''}`} onClick={() => { vibrar(10); alternar() }}
+                     disabled={alternando || !posicao} whileTap={{ scale: 0.88 }} whileHover={{ scale: 1.04 }}
+                     animate={online ? {} : { boxShadow: ['0 0 0 6px var(--verde-dim)', '0 0 0 16px transparent'] }}
+                     transition={online ? {} : { boxShadow: { duration: 1.8, repeat: Infinity } }}
+                     aria-label={online ? 'Ficar offline' : 'Ficar online'}>
+        {alternando ? <span className="giro" /> : online ? 'Pausar' : 'Iniciar'}
+      </motion.button>
+      <div className={`status-motorista ${online ? 'online' : ''}`}>
+        <span className={`ponto ${online ? 'pulsando' : ''}`} />
+        {online ? 'Você está online' : 'Você está offline'}
       </div>
+      <p className="status-motorista-apoio">
+        {online ? 'Procurando viagens perto de você' : posicao ? 'Toque em Iniciar para receber corridas' : 'Defina sua posição para começar'}
+      </p>
+
+      {resumo && (
+        <div className="ganhos-dia">
+          <div><b>{reais(resumo.ganhos_hoje)}</b><span>ganhos hoje</span></div>
+          <div><b>{resumo.corridas_hoje}</b><span>{resumo.corridas_hoje === 1 ? 'corrida hoje' : 'corridas hoje'}</span></div>
+          <div><b>{resumo.corridas_total}</b><span>no total</span></div>
+        </div>
+      )}
 
       <div className="posicao-motorista">
         <span className="lugar-icone gps"><Icone nome="carro" /></span>
@@ -377,11 +393,11 @@ function Fila({ online, alternando, alternar, posicao, endereco, erro, gpsFora, 
         {erro && <Aviso tipo="erro">{erro}</Aviso>}
       </AnimatePresence>
 
-      <p className="texto-apoio esquerda">
-        {online
-          ? 'Quando um passageiro pedir por perto, o pareamento reverso mede seu tempo real até ele pelas ruas — não a distância em linha reta.'
-          : 'Fique online para entrar na fila. Sua posição é enviada a cada 4 segundos.'}
-      </p>
+      {online && (
+        <p className="texto-apoio esquerda">
+          Quando um passageiro pedir por perto, o pareamento reverso mede seu tempo real até ele pelas ruas — não a distância em linha reta.
+        </p>
+      )}
     </div>
   )
 }
@@ -430,7 +446,7 @@ function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simu
           <Botao variante={simulacao ? 'secundario' : 'primario'} disabled={!trajeto || trajeto.pontos.length < 2}
                  onClick={simulacao ? pararSimulacao : iniciarSimulacao}>
             <Icone nome={simulacao ? 'fechar' : 'rota'} tamanho={19} />
-            {simulacao ? 'Parar simulação' : indoAoDestino ? 'Seguir até o destino (simular GPS)' : 'Ir até o passageiro (simular GPS)'}
+            {simulacao ? 'Parar navegação' : indoAoDestino ? 'Navegar até o destino (GPS simulado)' : 'Navegar até o embarque (GPS simulado)'}
           </Botao>
         )}
         <AnimatePresence>
@@ -440,7 +456,7 @@ function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simu
             </motion.div>
           )}
         </AnimatePresence>
-        {estado === 'rota' && <Botao variante="secundario" carregando={ocupado} onClick={() => agir('iniciar')}>Passageiro embarcou</Botao>}
+        {estado === 'rota' && <Botao variante="secundario" carregando={ocupado} onClick={() => agir('iniciar')}>Iniciar viagem</Botao>}
         {estado === 'em_curso' && (
           <Botao variante="secundario" carregando={ocupado} onClick={() => agir('finalizar')}><Icone nome="bandeira" tamanho={18} /> Finalizar corrida</Botao>
         )}

@@ -58,10 +58,23 @@ export interface Lugar extends Ponto {
 
 export interface ResultadoAlgoritmo { nos_expandidos: number; ms: number }
 
+/** Categorias de viagem (dominio/servicos/corrida.py, CATEGORIAS). */
+export type IdCategoria = 'economico' | 'conforto' | 'grande'
+
+export interface OpcaoViagem {
+  id: IdCategoria
+  nome: string
+  lugares: number
+  descricao: string
+  custo: number
+}
+
 export interface Estimativa {
   segundos: number
   metros: number
   custo_estimado: number
+  /** Do mais barato ao mais caro; a rota é a mesma, muda o carro. */
+  categorias: OpcaoViagem[]
   pontos: LatLon[]
   semaforos_no_caminho: number
   ancoragem_m: { origem: number; destino: number }
@@ -93,12 +106,17 @@ export interface Corrida {
   motorista_nome: string | null
   motorista_placa: string | null
   motorista_modelo: string | null
+  /** Corridas que o motorista já concluiu (o protótipo não coleta notas). */
+  motorista_corridas: number | null
   passageiro_nome: string | null
   origem: LatLon | null
   destino: LatLon | null
 }
 
 export interface Rota { segundos: number; metros: number; pontos: LatLon[] }
+
+/** /motoristas/resumo: só entra dinheiro depois do pagamento. */
+export interface ResumoMotorista { ganhos_hoje: number; corridas_hoje: number; corridas_total: number }
 
 export interface RespostaPosicao {
   no_ancorado: number

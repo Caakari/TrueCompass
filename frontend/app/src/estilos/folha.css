@@ -196,3 +196,41 @@
 }
 .estatistica-chip svg { color: var(--texto-fraco); }
 .estatistica-chip b { color: var(--texto); font: 700 13.5px 'Space Grotesk', sans-serif; }
+
+/* ============================================ escolha da categoria (Uber) */
+.lista-categorias { display: flex; flex-direction: column; gap: 4px; margin: 0 -4px; }
+.categoria {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px; text-align: left;
+  border-radius: 16px; border: 2px solid transparent; background: none; transition: background .2s, border-color .2s;
+}
+.categoria:hover { background: var(--cartao-alto); }
+.categoria.selecionada { border-color: var(--texto); background: var(--cartao); }
+.categoria-carro { width: 64px; height: 44px; display: grid; place-items: center; flex-shrink: 0; color: var(--texto); position: relative; }
+.categoria-carro .carro-extra { position: absolute; left: 6px; top: 4px; opacity: .35; }
+.categoria-textos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.categoria-nome { display: flex; align-items: center; gap: 8px; font: 700 16.5px 'Space Grotesk', sans-serif; }
+.categoria-lugares { display: inline-flex; align-items: center; gap: 2px; font: 500 12.5px 'Inter', sans-serif; color: var(--texto-dim); }
+.categoria-chegada { font-size: 13px; color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.categoria-descricao { font-size: 12px; color: var(--texto-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.categoria-preco { font: 700 17px 'Space Grotesk', sans-serif; white-space: nowrap; }
+.categoria.selecionada .categoria-preco { font-size: 18px; }
+.nota-categorias { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--texto-dim); padding: 0 4px; }
+.nota-categorias > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.nota-categorias b { color: var(--texto); }
+.nota-categorias small { font-size: 11px; color: var(--texto-fraco); }
+.nota-categorias svg { color: var(--texto-fraco); }
+.nota-categorias .ok .ponto { color: var(--verde); }
+.nota-categorias .nenhum .ponto { color: var(--vermelho); }
+/* Botão de confirmar grudado na base da área rolável da folha. */
+.acao-fixa {
+  position: sticky; bottom: calc(-1 * (var(--seguro-base) + 18px)); z-index: 2;
+  margin: 0 -18px calc(-1 * (var(--seguro-base) + 18px)); padding: 12px 18px calc(var(--seguro-base) + 18px);
+  background: linear-gradient(to bottom, transparent, var(--painel) 22%);
+}
+
+/* ===================================== cartão do motorista, estilo Uber */
+.cartao-motorista { align-items: flex-start; }
+.cartao-motorista-textos .cartao-corridas { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--texto-dim); }
+.cartao-veiculo { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; text-align: right; }
+.cartao-veiculo small { font-size: 12px; color: var(--texto-dim); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etiqueta-categoria { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 3px 9px; border-radius: 99px; background: var(--cartao-alto); font-size: 12px; font-weight: 600; color: var(--texto-dim); }

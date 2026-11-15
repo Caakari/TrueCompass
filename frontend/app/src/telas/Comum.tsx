@@ -266,22 +266,33 @@ function Barra({ rotulo, valor, maior, ms, classe, atraso = 0 }:
 
 // ========================================================= cartões diversos
 
-export function CartaoMotorista({ corrida }: { corrida: Corrida }) {
+export function CartaoMotorista({ corrida, categoria }: { corrida: Corrida; categoria?: string }) {
   const iniciais = (corrida.motorista_nome || 'Motorista').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+  const corridas = corrida.motorista_corridas
   return (
     <motion.div className="cartao-motorista" initial={{ opacity: 0, y: 14, rotateX: -30 }}
                 animate={{ opacity: 1, y: 0, rotateX: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 22, delay: 0.1 }}>
       <span className="avatar grande">{iniciais}<i className="avatar-anel" /></span>
       <div className="cartao-motorista-textos">
         <b>{corrida.motorista_nome || 'Seu motorista'}</b>
-        <span>{corrida.motorista_modelo || 'Carro'}</span>
+        {/* Contagem real de corridas concluídas: o protótipo não coleta notas. */}
+        {corridas != null && (
+          <span className="cartao-corridas">
+            <Icone nome="check" tamanho={12} traco={2.6} />
+            {corridas === 0 ? 'Primeira corrida' : `${milhar(corridas)} ${corridas === 1 ? 'corrida' : 'corridas'}`}
+          </span>
+        )}
+        {categoria && <span className="etiqueta-categoria"><Icone nome="carro" tamanho={13} /> {categoria}</span>}
       </div>
-      {corrida.motorista_placa && (
-        <motion.span className="placa" aria-label={`Placa ${corrida.motorista_placa}`}
-                     initial={{ rotateY: 90 }} animate={{ rotateY: 0 }} transition={{ delay: 0.35, type: 'spring', stiffness: 200, damping: 14 }}>
-          <small>BRASIL</small>{corrida.motorista_placa}
-        </motion.span>
-      )}
+      <div className="cartao-veiculo">
+        {corrida.motorista_placa && (
+          <motion.span className="placa" aria-label={`Placa ${corrida.motorista_placa}`}
+                       initial={{ rotateY: 90 }} animate={{ rotateY: 0 }} transition={{ delay: 0.35, type: 'spring', stiffness: 200, damping: 14 }}>
+            <small>BRASIL</small>{corrida.motorista_placa}
+          </motion.span>
+        )}
+        <small>{corrida.motorista_modelo || 'Carro'}</small>
+      </div>
     </motion.div>
   )
 }

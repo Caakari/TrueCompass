@@ -6,7 +6,7 @@
  * aponta para o backend no Railway.
  */
 import type {
-  Caixa, Corrida, Estimativa, InfoMalha, Lugar, Ponto, RespostaPosicao, Rota,
+  Caixa, Corrida, Estimativa, IdCategoria, InfoMalha, Lugar, Ponto, RespostaPosicao, ResumoMotorista, Rota,
   Semaforo, Sessao, TipoUsuario, Trecho,
 } from './tipos'
 
@@ -121,13 +121,14 @@ export const api = {
   // ---- motorista
   enviarPosicao: (token: string, lat: number, lon: number) =>
     pedir<RespostaPosicao>('/motoristas/posicao', { metodo: 'POST', corpo: { lat, lon }, token }),
+  resumoDoMotorista: (token: string) => pedir<ResumoMotorista>('/motoristas/resumo', { token }),
   definirDisponibilidade: (token: string, disponivel: boolean) =>
     pedir<{ disponivel: boolean; motoristas_online: number }>(
       '/motoristas/disponibilidade', { metodo: 'POST', corpo: { disponivel }, token }),
 
   // ---- corrida
-  pedirCorrida: (token: string, origem: Ponto, destino: Ponto) =>
-    pedir<Corrida>('/corridas', { metodo: 'POST', token, corpo: corpoViagem(origem, destino) }),
+  pedirCorrida: (token: string, origem: Ponto, destino: Ponto, categoria: IdCategoria = 'economico') =>
+    pedir<Corrida>('/corridas', { metodo: 'POST', token, corpo: { ...corpoViagem(origem, destino), categoria } }),
   consultarCorrida: (token: string, id: number) => pedir<Corrida>(`/corridas/${id}`, { token }),
   rotaDaCorrida: (token: string, id: number) => pedir<Rota>(`/corridas/${id}/rota`, { token }),
   rotaDoMotorista: (token: string, id: number) => pedir<Rota>(`/corridas/${id}/rota-motorista`, { token }),

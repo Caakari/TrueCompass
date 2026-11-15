@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Contratos de entrada e saida da API (Pydantic)."""
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -39,6 +41,9 @@ class CorridaEntrada(BaseModel):
     origem_lon: float = Field(ge=-180, le=180)
     destino_lat: float = Field(ge=-90, le=90)
     destino_lon: float = Field(ge=-180, le=180)
+    # Ver dominio.servicos.corrida.CATEGORIAS. Opcional: cliente antigo segue
+    # pedindo o Economico.
+    categoria: Literal["economico", "conforto", "grande"] = "economico"
 
 
 class CorridaSaida(BaseModel):
@@ -53,6 +58,9 @@ class CorridaSaida(BaseModel):
     motorista_nome: str | None = None
     motorista_placa: str | None = None
     motorista_modelo: str | None = None
+    # Corridas que o motorista ja concluiu: dado real, no lugar de uma "nota"
+    # que o prototipo nao coleta.
+    motorista_corridas: int | None = None
     passageiro_nome: str | None = None
     origem: tuple[float, float] | None = None       # cruzamento de embarque
     destino: tuple[float, float] | None = None

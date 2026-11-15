@@ -108,7 +108,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `main.py` — app e `lifespan` (valida DAG, carrega malha, constrói reverso)
 - `rotas/` — auth, motoristas, corridas, malha, lugares, viagens, ws · `conexoes.py` — WebSocket
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (37), `test_ws.py` (14)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (45), `test_ws.py` (14)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -182,6 +182,27 @@ Decisões que valem manter:
   técnica diz O(log n) e está **retificada** na Seção C (Proposição C.14).
 
 Decisões do front-end:
+
+- O fluxo segue o dos apps de corrida (estilo Uber), com a identidade do
+  TrueCompass: tela inicial é UMA pergunta ("Para onde?") + recentes; a prévia
+  é a escolha de **categoria** (Econômico ×1,00 · Conforto ×1,35 · Grande ×1,60,
+  em `dominio/servicos/corrida.py`, `CATEGORIAS`) com botão fixo na base e a
+  folha limitada a 68% da tela para a rota caber no mapa.
+- O multiplicador da categoria incide sobre a tarifa inteira; a rota é a mesma.
+  No protótipo todo motorista atende as três categorias — por isso o tempo de
+  chegada é igual nos três cartões, e a tela diz isso.
+- A categoria **não** vira coluna no banco: entra no cálculo de
+  `custo_estimado` no pedido (`CorridaEntrada.categoria`), que já é persistido.
+  Sem migração no MySQL de produção.
+- Mapa limpo: tiles em **tons de cinza**, sem semáforos e sem malha por padrão
+  (opção "Malha e semáforos" no menu). A única coisa colorida é a rota. Se os
+  tiles falharem, a malha volta como fundo, mas sem os semáforos.
+- Cartão do motorista mostra **corridas concluídas** (`motorista_corridas`), dado
+  real, no lugar de uma nota que o protótipo não coleta.
+- Painel do motorista: botão redondo Iniciar/Pausar e ganhos do dia
+  (`/motoristas/resumo`), que somam **só pagamentos** — o dinheiro entra depois
+  de `concluida → paga`, a mesma regra do DAG. "Hoje" é no fuso de SP (UTC−3
+  fixo, sem depender do tzdata da imagem).
 
 - O mapa desenha a malha vinda de `/malha/trechos`; os tiles do OSM são pano
   de fundo **opcional** e a camada é removida após 8 falhas seguidas.

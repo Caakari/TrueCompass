@@ -7,7 +7,9 @@ import {
   rumoVerdadeiro, saudacao, textoDistancia, textoDuracao, vibrar,
 } from '../lib/util'
 import { Mapa, type ApiMapa, type Onda } from '../mapa/Mapa'
-import type { Corrida, EstadoCorrida, Estimativa, LatLon, Lugar, Malha, Ponto, Rota, Sessao, Tema } from '../tipos'
+import type {
+  Corrida, EstadoCorrida, Estimativa, IdCategoria, LatLon, Lugar, Malha, OpcaoViagem, Ponto, Rota, Semaforo, Sessao, Tema,
+} from '../tipos'
 import { Bussola } from '../ui/Bussola'
 import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
@@ -21,6 +23,7 @@ import {
 const CHAVE_CORRIDA = 'truecompass.corrida'
 const FINAIS: EstadoCorrida[] = ['paga', 'cancelada']
 const VAZIO: LatLon[] = []
+const SEM_SEMAFOROS: Semaforo[] = []
 
 type Fase = 'inicio' | 'previa' | 'procurando' | 'sem_motorista' | 'corrida' | 'fim' | 'escolha'
 
@@ -41,7 +44,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   const caixa = malha.caixa
   const gpsNaArea = dentroDaCaixa(gps.posicao, caixa)
 
-  const salvo = useMemo(() => lerArmazenado<{ corridaId: number; origem: Lugar; destino: Lugar }>(CHAVE_CORRIDA), [])
+  const salvo = useMemo(() => lerArmazenado<{ corridaId: number; origem: Lugar; destino: Lugar; categoria?: IdCategoria }>(CHAVE_CORRIDA), [])
   const [origem, definirOrigem] = useState<Lugar | null>(salvo?.origem ?? null)
   const [destino, definirDestino] = useState<Lugar | null>(salvo?.destino ?? null)
   const [busca, definirBusca] = useState<Campo | null>(null)
@@ -57,7 +60,12 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [erro, definirErro] = useState<string | null>(null)
   const [ocupado, definirOcupado] = useState(false)
   const [margens, definirMargens] = useState<Margens>({ base: 0, esquerda: 0 })
+  // A malha e os semáforos só aparecem quando a pessoa pede (menu): o mapa
+  // fica limpo, e a única coisa em destaque é a rota. Sem tiles (offline),
+  // a malha volta como fundo, mas sem os semáforos.
   const [mostrarMalha, definirMostrarMalha] = useState(false)
+  const [semTiles, definirSemTiles] = useState(false)
+  const [categoria, definirCategoria] = useState<IdCategoria>(salvo?.categoria ?? 'economico')
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const recentes = useMemo(lerRecentes, [busca, corrida?.id])
 
@@ -84,7 +92,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   useEffect(() => {
     if (!corrida) return
     if (estado && FINAIS.includes(estado)) gravarArmazenado(CHAVE_CORRIDA, null)
-    else gravarArmazenado(CHAVE_CORRIDA, { corridaId: corrida.id, origem, destino })
+    else gravarArmazenado(CHAVE_CORRIDA, { corridaId: corrida.id, origem, destino, categoria })
   }, [corrida?.id, estado])
 
   // ---- partida padrão: o GPS, se estiver dentro da área coberta
@@ -178,7 +186,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
     vibrar([12, 40, 12])
     const inicio = performance.now()
     try {
-      const nova = await api.pedirCorrida(token, origem, destino)
+      const nova = await api.pedirCorrida(token, origem, destino, categoria)
       // O pareamento é rápido; o radar fica um instante para ser percebido.
       const resta = 1900 - (performance.now() - inicio)
       if (resta > 0) await esperar(resta)
@@ -210,6 +218,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   }
 
   function novaCorrida() {
+    definirCategoria('economico')
     definirCorrida(null); definirDestino(null); definirEstimativa(null); definirOnda(null)
     definirRotaCorrida(VAZIO); definirRotaMotorista(null); definirErro(null); definirConfete(null)
     gravarArmazenado(CHAVE_CORRIDA, null)
@@ -307,14 +316,14 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
             rota={rotaExibida}
             rotaMotorista={fase === 'corrida' && rotaMotorista ? rotaMotorista.pontos : VAZIO}
             conectores={conectores}
-            semaforos={malha.semaforos}
+            semaforos={mostrarMalha ? malha.semaforos : SEM_SEMAFOROS}
             onda={fase === 'previa' ? onda : null}
             cometa={(fase === 'previa' && Boolean(estimativa)) || (fase === 'corrida' && estado === 'em_curso')}
-            mostrarMalha={mostrarMalha}
+            mostrarMalha={mostrarMalha || semTiles}
             margens={margens}
             aoMoverCentro={escolha ? consultarPonto : undefined}
             aoIniciarMovimento={escolha ? () => definirEscolha((e) => e && { ...e, movendo: true }) : undefined}
-            aoFalharTiles={() => definirMostrarMalha(true)} />
+            aoFalharTiles={() => definirSemTiles(true)} />
 
       {fase === 'escolha' && escolha && <PinoCentral movendo={escolha.movendo} tipo={escolha.campo} base={margens.base} />}
 
@@ -324,15 +333,12 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
                    <>
                      <CabecaMenu icone="usuario" titulo="Passageiro" detalhe={`${malha.nos.toLocaleString('pt-BR')} cruzamentos reais`} />
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
-                     <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha do algoritmo</ItemMenu>
+                     <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha e semáforos</ItemMenu>
                      <ItemMenu icone="sair" perigo onClick={() => { fechar(); sair() }}>Sair</ItemMenu>
                    </>
                  )} />
 
       <ControlesMapa base={margens.base}>
-        <BotaoRedondo rotulo="Mostrar a malha do algoritmo" ativo={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>
-          <Icone nome="camadas" />
-        </BotaoRedondo>
         <BotaoRedondo rotulo="Minha localização" onClick={() => {
           if (gps.posicao) mapa.current?.voarPara(gps.posicao, 16)
           else if (malha.centro) mapa.current?.voarPara(malha.centro, 13)
@@ -341,20 +347,22 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
         </BotaoRedondo>
       </ControlesMapa>
 
-      <Folha chave={fase === 'corrida' ? `corrida-${estado}` : fase} aoMedir={definirMargens} recolher={recolherFolha}>
+      <Folha chave={fase === 'corrida' ? `corrida-${estado}` : fase} aoMedir={definirMargens} recolher={recolherFolha}
+             fracaoMaxima={fase === 'previa' ? 0.68 : undefined}>
         {fase === 'inicio' && (
-          <Inicio origem={origem} gps={gps} gpsNaArea={gpsNaArea} recentes={recentes} malha={malha}
+          <Inicio origem={origem} gps={gps} gpsNaArea={gpsNaArea} recentes={recentes}
                   abrirBusca={definirBusca} aoEscolherRecente={(l) => aplicar('destino', l)} />
         )}
         {fase === 'previa' && origem && destino && (
           <Previa origem={origem} destino={destino} estimativa={calculando ? null : estimativa} erro={erro}
+                  categoria={categoria} escolherCategoria={(c) => { vibrar(8); definirCategoria(c) }}
                   trocar={trocar} abrirBusca={definirBusca} voltar={() => { definirDestino(null); definirErro(null) }}
                   confirmar={confirmar} comparar={compararBuscas} />
         )}
         {fase === 'procurando' && <Procurando />}
         {fase === 'sem_motorista' && <SemMotorista tentar={confirmar} voltar={() => definirSemMotorista(false)} />}
         {fase === 'corrida' && corrida && (
-          <EmCorrida corrida={corrida} estado={estado} destino={destino} rotaMotorista={rotaMotorista}
+          <EmCorrida corrida={corrida} estado={estado} destino={destino} rotaMotorista={rotaMotorista} categoria={categoria}
                      conectado={aoVivo.conectado} ocupado={ocupado} erro={erro} agir={agir} />
         )}
         {fase === 'fim' && corrida && <Fim estado={estado} corrida={corrida} destino={destino} novaCorrida={novaCorrida} />}
@@ -387,9 +395,9 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
 
 // ================================================================== fases
 
-function Inicio({ origem, gps, gpsNaArea, recentes, malha, abrirBusca, aoEscolherRecente }: {
+function Inicio({ origem, gps, gpsNaArea, recentes, abrirBusca, aoEscolherRecente }: {
   origem: Lugar | null; gps: ReturnType<typeof useLocalizacao>; gpsNaArea: boolean; recentes: Lugar[]
-  malha: Malha; abrirBusca: (c: Campo) => void; aoEscolherRecente: (l: Lugar) => void
+  abrirBusca: (c: Campo) => void; aoEscolherRecente: (l: Lugar) => void
 }) {
   const detalhe = origem?.detalhe ?? (
     gps.estado === 'aguardando' ? 'Procurando seu GPS…'
@@ -399,14 +407,32 @@ function Inicio({ origem, gps, gpsNaArea, recentes, malha, abrirBusca, aoEscolhe
   return (
     <div className="conteudo">
       <motion.div className="saudacao" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>{saudacao()}</motion.div>
-      <TextoRevelado as="h1" className="titulo-folha" texto="Para onde vamos?" />
+      {/* Como nos apps de corrida: a tela inicial é UMA pergunta. */}
       <motion.button layoutId="caixa-busca" className="campo-busca" whileTap={{ scale: 0.97 }}
                      transition={{ type: 'spring', stiffness: 380, damping: 34 }}
                      onClick={() => { vibrar(8); abrirBusca('destino') }}>
         <Icone nome="busca" tamanho={21} />
-        <span>Buscar destino</span>
+        <span>Para onde?</span>
         <span className="campo-busca-atalho"><Icone nome="relogio" tamanho={15} /> Agora</span>
       </motion.button>
+
+      {recentes.length > 0 && (
+        <motion.ul className="lista-rapida" initial="o" animate="v"
+                   variants={{ v: { transition: { staggerChildren: 0.06, delayChildren: 0.15 } } }}>
+          {recentes.slice(0, 3).map((lugar) => (
+            <motion.li key={lugar.id} variants={{ o: { opacity: 0, x: -16 }, v: { opacity: 1, x: 0 } }}>
+              <motion.button className="lugar" whileTap={{ scale: 0.97 }} whileHover={{ x: 4 }}
+                             onClick={() => { vibrar(8); aoEscolherRecente(lugar) }}>
+                <span className="lugar-icone"><Icone nome="relogio" /></span>
+                <span className="lugar-textos">
+                  <span className="lugar-titulo">{lugar.titulo}</span>
+                  {lugar.detalhe && <span className="lugar-detalhe">{lugar.detalhe}</span>}
+                </span>
+              </motion.button>
+            </motion.li>
+          ))}
+        </motion.ul>
+      )}
 
       <motion.button className="linha-partida" onClick={() => abrirBusca('origem')} whileTap={{ scale: 0.98 }}
                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.15 } }}>
@@ -426,29 +452,6 @@ function Inicio({ origem, gps, gpsNaArea, recentes, malha, abrirBusca, aoEscolhe
           </Aviso>
         )}
       </AnimatePresence>
-
-      {recentes.length > 0 && (
-        <motion.ul className="lista-rapida" initial="o" animate="v"
-                   variants={{ v: { transition: { staggerChildren: 0.06, delayChildren: 0.2 } } }}>
-          {recentes.slice(0, 3).map((lugar) => (
-            <motion.li key={lugar.id} variants={{ o: { opacity: 0, x: -16 }, v: { opacity: 1, x: 0 } }}>
-              <motion.button className="lugar" whileTap={{ scale: 0.97 }} whileHover={{ x: 4 }}
-                             onClick={() => { vibrar(8); aoEscolherRecente(lugar) }}>
-                <span className="lugar-icone"><Icone nome="relogio" /></span>
-                <span className="lugar-textos">
-                  <span className="lugar-titulo">{lugar.titulo}</span>
-                  {lugar.detalhe && <span className="lugar-detalhe">{lugar.detalhe}</span>}
-                </span>
-              </motion.button>
-            </motion.li>
-          ))}
-        </motion.ul>
-      )}
-
-      <div className="rodape-area">
-        <Icone nome="mapa" tamanho={13} />
-        {malha.nos.toLocaleString('pt-BR')} cruzamentos · {malha.semaforos.length.toLocaleString('pt-BR')} semáforos reais · OpenStreetMap
-      </div>
     </div>
   )
 }
@@ -472,18 +475,21 @@ function ResumoTrajeto({ origem, destino, abrirBusca, trocar }:
   )
 }
 
-function Previa({ origem, destino, estimativa, erro, trocar, abrirBusca, voltar, confirmar, comparar }: {
-  origem: Lugar; destino: Lugar; estimativa: Estimativa | null; erro: string | null; trocar: () => void
+function Previa({ origem, destino, estimativa, erro, categoria, escolherCategoria, trocar, abrirBusca, voltar, confirmar, comparar }: {
+  origem: Lugar; destino: Lugar; estimativa: Estimativa | null; erro: string | null
+  categoria: IdCategoria; escolherCategoria: (c: IdCategoria) => void; trocar: () => void
   abrirBusca: (c: Campo) => void; voltar: () => void; confirmar: () => void; comparar: () => void
 }) {
   const eta = estimativa?.motoristas?.eta_mais_proximo_s ?? null
   const longe = estimativa ? Math.max(estimativa.ancoragem_m.origem, estimativa.ancoragem_m.destino) : 0
+  const opcoes = estimativa?.categorias ?? []
+  const escolhida = opcoes.find((o) => o.id === categoria) ?? opcoes[0]
 
   return (
     <div className="conteudo">
       <div className="linha-cabeca">
         <motion.button className="botao-icone" onClick={voltar} whileTap={{ scale: 0.8 }} aria-label="Voltar"><Icone nome="voltar" tamanho={22} /></motion.button>
-        <span className="cabeca-titulo">Escolha a viagem</span>
+        <span className="cabeca-titulo">Escolha uma viagem</span>
       </div>
       <ResumoTrajeto origem={origem} destino={destino} abrirBusca={abrirBusca} trocar={trocar} />
 
@@ -493,47 +499,32 @@ function Previa({ origem, destino, estimativa, erro, trocar, abrirBusca, voltar,
         <div className="calculando">
           <div className="calculando-texto"><Icone nome="rota" tamanho={18} /> Calculando a rota mais rápida pelas ruas<Reticencias /></div>
           <div className="barra-indeterminada"><span /></div>
-          <div className="opcao-corrida">
-            <Esqueleto largura={54} altura={54} raio={14} />
-            <div style={{ flex: 1 }}><Esqueleto largura="45%" altura={15} /><Esqueleto largura="70%" altura={11} style={{ marginTop: 8 }} /></div>
-            <Esqueleto largura={64} altura={20} />
-          </div>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="categoria">
+              <Esqueleto largura={58} altura={38} raio={10} />
+              <div style={{ flex: 1 }}><Esqueleto largura="40%" altura={15} /><Esqueleto largura="65%" altura={11} style={{ marginTop: 8 }} /></div>
+              <Esqueleto largura={58} altura={18} />
+            </div>
+          ))}
         </div>
       )}
 
-      {estimativa && (
+      {estimativa && escolhida && (
         <>
-          <motion.div className="opcao-corrida selecionada" initial={{ opacity: 0, scale: 0.9, rotateX: 25 }}
-                      animate={{ opacity: 1, scale: 1, rotateX: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-            <motion.div className="opcao-icone" initial={{ x: -40, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 16 }}>
-              <Icone nome="carro" tamanho={30} traco={1.7} />
-            </motion.div>
-            <div className="opcao-textos">
-              <b>TrueCompass</b>
-              <span>Chegada às {horarioDaqui(estimativa.segundos + (eta ?? 0))} · {textoDuracao(estimativa.segundos)}</span>
-            </div>
-            <div className="opcao-preco"><Odometro texto={reais(estimativa.custo_estimado)} /></div>
-          </motion.div>
-
-          <motion.div className="estatisticas-linha" initial="o" animate="v"
-                      variants={{ v: { transition: { staggerChildren: 0.07, delayChildren: 0.15 } } }}>
-            {[
-              { icone: 'rota', valor: textoDistancia(estimativa.metros), rotulo: 'pelas ruas' },
-              { icone: 'relogio', valor: textoDuracao(estimativa.segundos), rotulo: 'de viagem' },
-              { icone: 'semaforo', valor: String(estimativa.semaforos_no_caminho), rotulo: 'semáforos' },
-            ].map((e) => (
-              <motion.span key={e.rotulo} className="estatistica-chip"
-                           variants={{ o: { opacity: 0, y: 12, scale: 0.85 }, v: { opacity: 1, y: 0, scale: 1 } }}>
-                <Icone nome={e.icone} tamanho={15} />
-                <b>{e.valor}</b> {e.rotulo}
-              </motion.span>
+          <motion.div className="lista-categorias" role="radiogroup" aria-label="Categoria da viagem"
+                      initial="o" animate="v" variants={{ v: { transition: { staggerChildren: 0.07 } } }}>
+            {opcoes.map((opcao) => (
+              <CartaoCategoria key={opcao.id} opcao={opcao} selecionada={opcao.id === escolhida.id}
+                               segundos={estimativa.segundos} eta={eta} escolher={() => escolherCategoria(opcao.id)} />
             ))}
           </motion.div>
-
-          <div className={`linha-motoristas ${eta != null ? 'ok' : 'nenhum'}`}>
-            <span className={`ponto ${eta != null ? 'pulsando' : ''}`} />
-            <span>{eta != null ? <>Motorista mais próximo a <b>{textoDuracao(eta)}</b> pelas ruas</> : 'Nenhum motorista online por perto agora'}</span>
+          <div className="nota-categorias">
+            <span><Icone nome="rota" tamanho={14} /> <b>{textoDistancia(estimativa.metros)}</b> pelas ruas · <b>{textoDuracao(estimativa.segundos)}</b> de viagem · <b>{estimativa.semaforos_no_caminho}</b> semáforos</span>
+            <span className={eta != null ? 'ok' : 'nenhum'}>
+              <span className={`ponto ${eta != null ? 'pulsando' : ''}`} />
+              {eta != null ? <>Motorista mais próximo a <b>{textoDuracao(eta)}</b> pelas ruas</> : 'Nenhum motorista online por perto agora'}
+            </span>
+            <small>No protótipo, os mesmos motoristas atendem as três categorias.</small>
           </div>
 
           {longe > 150 && (
@@ -542,12 +533,51 @@ function Previa({ origem, destino, estimativa, erro, trocar, abrirBusca, voltar,
 
           <DetalhesAlgoritmo estimativa={estimativa} aoComparar={comparar} />
 
-          <Botao onClick={confirmar} className="botao-confirmar">
-            <Icone nome="raio" tamanho={18} /> Confirmar TrueCompass
-          </Botao>
+          {/* Fixo na base da folha: a ação nunca some abaixo da dobra. */}
+          <div className="acao-fixa">
+            <Botao onClick={confirmar} className="botao-confirmar">
+              Confirmar {escolhida.nome} · {reais(escolhida.custo)}
+            </Botao>
+          </div>
         </>
       )}
     </div>
+  )
+}
+
+/** Um cartão por categoria: carro, lugares, chegada e preço. */
+function CartaoCategoria({ opcao, selecionada, segundos, eta, escolher }: {
+  opcao: OpcaoViagem; selecionada: boolean; segundos: number; eta: number | null; escolher: () => void
+}) {
+  return (
+    <motion.button role="radio" aria-checked={selecionada} className={`categoria ${selecionada ? 'selecionada' : ''}`}
+                   onClick={escolher} whileTap={{ scale: 0.98 }} layout
+                   variants={{ o: { opacity: 0, y: 14 }, v: { opacity: 1, y: 0 } }}>
+      <span className="categoria-carro" aria-hidden="true">
+        {opcao.lugares > 4 && <span className="carro-extra"><Icone nome="carro" tamanho={34} traco={1.6} /></span>}
+        <motion.span animate={{ scale: selecionada ? 1.12 : 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
+          <Icone nome="carro" tamanho={38} traco={opcao.id === 'conforto' ? 2 : 1.6} />
+        </motion.span>
+      </span>
+      <span className="categoria-textos">
+        <span className="categoria-nome">
+          {opcao.nome}
+          <span className="categoria-lugares"><Icone nome="usuario" tamanho={13} /> {opcao.lugares}</span>
+        </span>
+        <span className="categoria-chegada">
+          Chegada às {horarioDaqui(segundos + (eta ?? 0))}{eta != null && <> · a {Math.max(1, Math.round(eta / 60))} min</>}
+        </span>
+        <AnimatePresence initial={false}>
+          {selecionada && (
+            <motion.span className="categoria-descricao" initial={{ opacity: 0, height: 0 }}
+                         animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+              {opcao.descricao}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </span>
+      <span className="categoria-preco">{selecionada ? <Odometro texto={reais(opcao.custo)} /> : reais(opcao.custo)}</span>
+    </motion.button>
   )
 }
 
@@ -583,8 +613,10 @@ function SemMotorista({ tentar, voltar }: { tentar: () => void; voltar: () => vo
   )
 }
 
-function EmCorrida({ corrida, estado, destino, rotaMotorista, conectado, ocupado, erro, agir }: {
-  corrida: Corrida; estado: EstadoCorrida | null; destino: Lugar | null; rotaMotorista: Rota | null
+const NOME_CATEGORIA: Record<IdCategoria, string> = { economico: 'Econômico', conforto: 'Conforto', grande: 'Grande' }
+
+function EmCorrida({ corrida, estado, destino, rotaMotorista, categoria, conectado, ocupado, erro, agir }: {
+  corrida: Corrida; estado: EstadoCorrida | null; destino: Lugar | null; rotaMotorista: Rota | null; categoria: IdCategoria
   conectado: boolean; ocupado: boolean; erro: string | null; agir: (a: AcaoCorrida) => void
 }) {
   const eta = rotaMotorista?.segundos ?? corrida.eta_segundos
@@ -595,16 +627,16 @@ function EmCorrida({ corrida, estado, destino, rotaMotorista, conectado, ocupado
       <div className="status-corrida">
         {aCaminho && (
           <>
-            <small>Motorista a caminho</small>
+            <small>Encontre seu motorista no embarque</small>
             <h2 className="titulo-folha">{minutos != null ? <>Chega em <Odometro texto={String(minutos)} /> min</> : 'Chegando'}</h2>
           </>
         )}
-        {estado === 'em_curso' && <><small>Em viagem</small><TextoRevelado className="titulo-folha" texto={destino?.titulo ?? 'A caminho do destino'} /></>}
+        {estado === 'em_curso' && <><small>A caminho do destino</small><TextoRevelado className="titulo-folha" texto={destino?.titulo ?? 'Em viagem'} /></>}
         {estado === 'concluida' && <><small>Corrida concluída</small><TextoRevelado className="titulo-folha" texto="Você chegou!" /></>}
         <SeloAoVivo conectado={conectado} />
       </div>
 
-      <CartaoMotorista corrida={corrida} />
+      <CartaoMotorista corrida={corrida} categoria={NOME_CATEGORIA[categoria]} />
       <LinhaDeEstados estado={estado} />
       <AnimatePresence>{erro && <Aviso tipo="erro">{erro}</Aviso>}</AnimatePresence>
 

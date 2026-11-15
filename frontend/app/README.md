@@ -45,6 +45,15 @@ src/
 └── estilos/              base, mapa, folha, telas (tema claro e escuro)
 ```
 
+## O fluxo, no padrão dos apps de corrida
+
+| Tela | O que tem |
+|---|---|
+| Início | "Para onde?", recentes e a partida (GPS). Mapa em cinza, sem semáforos |
+| Escolha da viagem | Três categorias com preço e chegada; botão fixo; a rota visível no mapa |
+| Corrida | "Chega em N min", cartão do motorista (corridas concluídas, categoria, placa, carro) |
+| Motorista | Botão Iniciar/Pausar, ganhos e corridas de hoje, chegada de corrida |
+
 ## As animações, e o que cada uma representa
 
 | Animação | O que é de verdade |

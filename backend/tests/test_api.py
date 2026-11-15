@@ -94,10 +94,10 @@ def novo_motorista(lat=MOTORISTA[0], lon=MOTORISTA[1], disponivel=True):
     return token
 
 
-def pedir_corrida(token_passageiro):
+def pedir_corrida(token_passageiro, **extra):
     return cliente.post("/corridas", json={
         "origem_lat": ORIGEM[0], "origem_lon": ORIGEM[1],
-        "destino_lat": DESTINO[0], "destino_lon": DESTINO[1],
+        "destino_lat": DESTINO[0], "destino_lon": DESTINO[1], **extra,
     }, headers=cabecalho(token_passageiro))
 
 
@@ -503,6 +503,81 @@ def test_busca_fora_do_ar_devolve_503():
     assert resposta.status_code == 503
 
 # ---------------------------------------------------------------------------
+
+# -------------------------------------------------------------- categorias
+
+def test_estimativa_traz_as_tres_categorias_em_ordem_de_preco():
+    dados = estimar(novo_passageiro()).json()
+    categorias = dados["categorias"]
+    assert [c["id"] for c in categorias] == ["economico", "conforto", "grande"]
+    precos = [c["custo"] for c in categorias]
+    assert precos == sorted(precos) and precos[0] < precos[-1]
+    assert precos[0] == dados["custo_estimado"]          # Economico e o padrao
+    assert categorias[2]["lugares"] == 6
+
+
+def test_corrida_cobra_o_preco_da_categoria_escolhida():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    previa = {c["id"]: c["custo"] for c in estimar(passageiro).json()["categorias"]}
+    corrida = pedir_corrida(passageiro, categoria="conforto").json()
+    assert abs(corrida["custo_estimado"] - previa["conforto"]) < 0.02, (corrida, previa)
+
+
+def test_corrida_sem_categoria_cobra_o_economico():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    previa = estimar(passageiro).json()["custo_estimado"]
+    corrida = pedir_corrida(passageiro).json()
+    assert abs(corrida["custo_estimado"] - previa) < 0.02
+
+
+def test_categoria_desconhecida_e_recusada():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    assert pedir_corrida(passageiro, categoria="limusine").status_code == 422
+
+
+def test_cartao_traz_corridas_concluidas_do_motorista():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    primeira = pedir_corrida(passageiro).json()
+    assert primeira["motorista_corridas"] == 0
+    for acao in ("iniciar", "finalizar"):
+        cliente.post(f"/corridas/{primeira['id']}/{acao}", headers=cabecalho(passageiro))
+    depois = cliente.get(f"/corridas/{primeira['id']}", headers=cabecalho(passageiro)).json()
+    assert depois["motorista_corridas"] == 1
+
+
+def test_resumo_do_motorista_soma_so_o_que_foi_pago_hoje():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    assert cliente.get("/motoristas/resumo", headers=cabecalho(motorista)).json() == {
+        "ganhos_hoje": 0.0, "corridas_hoje": 0, "corridas_total": 0}
+    corrida = pedir_corrida(passageiro).json()
+    for acao in ("iniciar", "finalizar"):
+        cliente.post(f"/corridas/{corrida['id']}/{acao}", headers=cabecalho(passageiro))
+    concluida = cliente.get("/motoristas/resumo", headers=cabecalho(motorista)).json()
+    assert concluida["ganhos_hoje"] == 0.0 and concluida["corridas_total"] == 1
+    cliente.post(f"/corridas/{corrida['id']}/pagamento", headers=cabecalho(passageiro))
+    paga = cliente.get("/motoristas/resumo", headers=cabecalho(motorista)).json()
+    assert paga["corridas_hoje"] == 1
+    assert abs(paga["ganhos_hoje"] - corrida["custo_estimado"]) < 0.01
+
+
+def test_resumo_e_exclusivo_de_motorista():
+    assert cliente.get("/motoristas/resumo",
+                       headers=cabecalho(novo_passageiro())).status_code == 403
+
+
+def test_inicio_do_dia_segue_o_fuso_de_sao_paulo():
+    from datetime import datetime, timezone
+    from api.rotas.motoristas import inicio_do_dia_utc
+    # 01:30 UTC de 16/11 ainda e 15/11 em Sao Paulo (22:30): o dia comecou
+    # as 03:00 UTC de 15/11.
+    agora = datetime(2026, 11, 16, 1, 30, tzinfo=timezone.utc)
+    assert inicio_do_dia_utc(agora) == datetime(2026, 11, 15, 3, 0)
+
 
 def main():
     global cliente
