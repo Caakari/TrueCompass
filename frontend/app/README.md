@@ -59,6 +59,7 @@ src/
 | Paradas | Até 3 entre a partida e o destino, numeradas no mapa; a rota e o preço passam por elas |
 | Chat | Mensagens durante a corrida, com respostas rápidas e contador de não lidas |
 | Compartilhar | Link `?acompanhar=…` que abre o carro no mapa sem login, até a corrida acabar |
+| Oferta | O motorista recebe a corrida com valor, embarque e destino, e tem 20 s para aceitar ou recusar; a passageira vê o prazo correndo |
 
 ## As animações, e o que cada uma representa
 

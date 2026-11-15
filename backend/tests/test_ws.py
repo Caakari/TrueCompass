@@ -17,6 +17,8 @@ os.environ["JWT_SECRET"] = "segredo-de-teste"
 os.environ["AMBIENTE"] = "teste"
 os.environ["MALHA_ARQUIVO"] = "__inexistente__"
 os.environ["MAPA_MATRIZ"] = "__inexistente__"
+# Prazo curto para o teste do laco que expira ofertas nao demorar.
+os.environ["OFERTA_PRAZO_S"] = "2"
 
 from fastapi.testclient import TestClient      # noqa: E402
 
@@ -47,10 +49,10 @@ def registrar(tipo):
     return resposta.json()["token"]
 
 
-def motorista_online():
+def motorista_online(lat=MOTORISTA[0], lon=MOTORISTA[1]):
     token = registrar("motorista")
     cliente.post("/motoristas/posicao",
-                 json={"lat": MOTORISTA[0], "lon": MOTORISTA[1]},
+                 json={"lat": lat, "lon": lon},
                  headers=cabecalho(token))
     cliente.post("/motoristas/disponibilidade", json={"disponivel": True},
                  headers=cabecalho(token))
@@ -67,17 +69,22 @@ def corrida_pronta():
         "destino_lat": DESTINO[0], "destino_lon": DESTINO[1],
     }, headers=cabecalho(passageiro))
     assert resposta.status_code == 201, resposta.text
-    return passageiro, motorista, resposta.json()["id"]
+    cid = resposta.json()["id"]
+    # A corrida e OFERECIDA ao motorista; ele aceita, e ela chega em `rota`.
+    aceite = cliente.post(f"/corridas/{cid}/aceitar", headers=cabecalho(motorista))
+    assert aceite.status_code == 200, aceite.text
+    return passageiro, motorista, cid
 
 
 def limpar_pool():
     from infra.banco import Sessao
-    from infra.modelos import Motorista
+    from infra.modelos import Motorista, Oferta
 
     sessao = Sessao()
     try:
         for motorista in sessao.query(Motorista).all():
             motorista.disponivel = False
+        sessao.query(Oferta).filter_by(status="pendente").update({"status": "cancelada"})
         sessao.commit()
     finally:
         sessao.close()
@@ -193,6 +200,29 @@ def test_mensagem_do_chat_chega_ao_outro_lado():
     assert evento["evento"] == "mensagem"
     assert evento["mensagem"]["texto"] == "Estou na portaria"
     assert evento["mensagem"]["id"] == r.json()["id"]
+
+
+def test_laco_do_servidor_passa_adiante_a_oferta_sem_resposta():
+    """O vigia do lifespan (a cada 2 s) expira a oferta de 2 s sozinho."""
+    import time
+    limpar_pool()
+    passageiro = registrar("passageiro")
+    perto = motorista_online()
+    motorista_online(-23.5290, -46.6160)
+    corrida = cliente.post("/corridas", json={
+        "origem_lat": ORIGEM[0], "origem_lon": ORIGEM[1],
+        "destino_lat": DESTINO[0], "destino_lon": DESTINO[1],
+    }, headers=cabecalho(passageiro)).json()
+    primeiro = corrida["motorista_id"]
+    fim = time.time() + 10
+    atual = corrida
+    while time.time() < fim and atual["motorista_id"] == primeiro:
+        time.sleep(0.5)
+        atual = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(passageiro)).json()
+    assert atual["motorista_id"] not in (None, primeiro), "a oferta devia ter passado ao segundo"
+    assert atual["estado"] == E.ALOCACAO and atual["aguardando_aceite"]
+    assert cliente.post(f"/corridas/{corrida['id']}/aceitar",
+                        headers=cabecalho(perto)).status_code == 403
 
 
 def test_posicao_sem_corrida_ativa_nao_publica():

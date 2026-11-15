@@ -54,12 +54,16 @@ def limpar_estado():
     precisam ser limpos.
     """
     from infra.banco import Sessao
-    from infra.modelos import Motorista
+    from infra.modelos import Motorista, Oferta
 
     sessao = Sessao()
     try:
         for motorista in sessao.query(Motorista).all():
             motorista.disponivel = False
+        # O laco que expira ofertas roda em segundo plano durante a suite: uma
+        # oferta vencida deixada por um teste seria passada adiante no meio do
+        # seguinte, reservando o motorista que ele acabou de criar.
+        sessao.query(Oferta).filter_by(status="pendente").update({"status": "cancelada"})
         sessao.commit()
     finally:
         sessao.close()
@@ -82,6 +86,10 @@ def novo_passageiro():
     return r.json()["token"]
 
 
+# motoristas.id -> token: o helper de pedido aceita a oferta como o motorista.
+TOKENS_MOTORISTA = {}
+
+
 def novo_motorista(lat=MOTORISTA[0], lon=MOTORISTA[1], disponivel=True):
     n = next(_contador)
     r = cliente.post("/auth/registro", json={
@@ -90,6 +98,14 @@ def novo_motorista(lat=MOTORISTA[0], lon=MOTORISTA[1], disponivel=True):
         "placa": f"ABC{n:04d}"[:10], "modelo": "Onix"})
     assert r.status_code == 201, r.text
     token = r.json()["token"]
+    from infra.banco import Sessao
+    from infra.modelos import Motorista
+    sessao = Sessao()
+    try:
+        motorista_id = sessao.query(Motorista).filter_by(usuario_id=r.json()["usuario_id"]).one().id
+    finally:
+        sessao.close()
+    TOKENS_MOTORISTA[motorista_id] = token
     assert cliente.post("/motoristas/posicao", json={"lat": lat, "lon": lon},
                         headers=cabecalho(token)).status_code == 200
     if disponivel:
@@ -98,11 +114,34 @@ def novo_motorista(lat=MOTORISTA[0], lon=MOTORISTA[1], disponivel=True):
     return token
 
 
-def pedir_corrida(token_passageiro, **extra):
-    return cliente.post("/corridas", json={
+class _Resposta:
+    """Status do PEDIDO (201) com o corpo da corrida depois do aceite."""
+
+    def __init__(self, status_code, corpo):
+        self.status_code, self._corpo, self.text = status_code, corpo, str(corpo)
+
+    def json(self):
+        return self._corpo
+
+
+def pedir_corrida(token_passageiro, aceitar=True, **extra):
+    """Pede a corrida e, por padrao, o motorista ofertado ACEITA na hora.
+
+    Os testes do ciclo (iniciar, finalizar, pagar...) partem de `rota`, como
+    antes das ofertas. `aceitar=False` deixa a oferta aberta.
+    """
+    r = cliente.post("/corridas", json={
         "origem_lat": ORIGEM[0], "origem_lon": ORIGEM[1],
         "destino_lat": DESTINO[0], "destino_lon": DESTINO[1], **extra,
     }, headers=cabecalho(token_passageiro))
+    if not aceitar or r.status_code != 201 or r.json()["estado"] != E.ALOCACAO:
+        return r
+    corrida = r.json()
+    aceite = cliente.post(f"/corridas/{corrida['id']}/aceitar",
+                          headers=cabecalho(TOKENS_MOTORISTA[corrida["motorista_id"]]))
+    assert aceite.status_code == 200, aceite.text
+    return _Resposta(r.status_code,
+                     cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(token_passageiro)).json())
 
 
 # ------------------------------------------------------------------ basico
@@ -913,6 +952,144 @@ def test_so_o_passageiro_compartilha_e_token_falso_da_404():
     assert visto_pelo_motorista["token_compartilhar"] is None
     for falso in ("abc", "x" * 22):
         assert cliente.get(f"/publico/acompanhar/{falso}").status_code == 404
+
+
+# ------------------------------------------------------------------ oferta
+
+PERTO = MOTORISTA
+UM_POUCO_LONGE = (-23.5290, -46.6160)
+
+
+def _motorista_de(corrida):
+    return TOKENS_MOTORISTA[corrida["motorista_id"]]
+
+
+def _sessao():
+    from infra.banco import Sessao
+    return Sessao()
+
+
+def test_pedido_espera_o_aceite_com_preco_ja_calculado():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    assert corrida["estado"] == E.ALOCACAO and corrida["aguardando_aceite"] is True
+    assert 0 < corrida["oferta_segundos"] <= 20
+    assert corrida["custo_estimado"] > 0, "o motorista ve o valor ANTES de aceitar"
+    ping = cliente.post("/motoristas/posicao", json={"lat": PERTO[0], "lon": PERTO[1]},
+                        headers=cabecalho(motorista)).json()
+    assert ping["corrida_ativa"] == corrida["id"], "a oferta chega pela batida de GPS"
+
+
+def test_aceite_leva_a_corrida_para_rota():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    r = cliente.post(f"/corridas/{corrida['id']}/aceitar", headers=cabecalho(motorista))
+    assert r.status_code == 200 and r.json()["estado"] == E.ROTA
+    assert r.json()["aguardando_aceite"] is False
+
+
+def test_recusa_passa_a_corrida_ao_proximo_do_ranking():
+    passageiro = novo_passageiro()
+    perto = novo_motorista(*PERTO)
+    longe = novo_motorista(*UM_POUCO_LONGE)
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    assert _motorista_de(corrida) == perto, "a primeira oferta vai para o de menor ETA"
+    assert cliente.post(f"/corridas/{corrida['id']}/recusar", headers=cabecalho(perto)).status_code == 204
+    depois = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(passageiro)).json()
+    assert depois["estado"] == E.ALOCACAO and _motorista_de(depois) == longe
+    assert cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(perto)).status_code == 403, \
+        "quem recusou deixa de participar da corrida"
+    disponivel = cliente.post("/motoristas/posicao", json={"lat": PERTO[0], "lon": PERTO[1]},
+                              headers=cabecalho(perto)).json()
+    assert disponivel["corrida_ativa"] is None
+
+
+def test_ninguem_aceita_cancela_com_motivo_e_nao_reoferece_a_quem_recusou():
+    passageiro = novo_passageiro()
+    perto = novo_motorista(*PERTO)
+    longe = novo_motorista(*UM_POUCO_LONGE)
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    cliente.post(f"/corridas/{corrida['id']}/recusar", headers=cabecalho(perto))
+    cliente.post(f"/corridas/{corrida['id']}/recusar", headers=cabecalho(longe))
+    fim = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(passageiro)).json()
+    assert fim["estado"] == E.CANCELADA and fim["motivo_cancelamento"] == "nenhum motorista aceitou"
+    transicoes = _transicoes(corrida["id"])
+    assert transicoes == [("pedido", "alocacao"), ("alocacao", "cancelada")], \
+        "trocar de motorista nao e transicao: o DAG continua sem ciclo"
+
+
+def _transicoes(corrida_id):
+    from infra.modelos import CorridaTransicao
+    sessao = _sessao()
+    try:
+        return [(t.de_estado, t.para_estado) for t in
+                sessao.query(CorridaTransicao).filter_by(corrida_id=corrida_id).order_by(CorridaTransicao.id)]
+    finally:
+        sessao.close()
+
+
+def test_oferta_sem_resposta_expira_e_passa_adiante():
+    from datetime import timedelta
+    from dominio.servicos import corrida as servico
+    from infra.config import obter_config
+    passageiro = novo_passageiro()
+    perto = novo_motorista(*PERTO)
+    longe = novo_motorista(*UM_POUCO_LONGE)
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    sessao = _sessao()
+    try:
+        futuro = servico.agora_utc() + timedelta(seconds=60)
+        mudaram = servico.expirar_ofertas(sessao, aplicacao.state.grafo, aplicacao.state.registro,
+                                          obter_config(), agora=futuro)
+        sessao.commit()
+        assert [c.id for c in mudaram] == [corrida["id"]]
+    finally:
+        sessao.close()
+    depois = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(passageiro)).json()
+    assert _motorista_de(depois) == longe
+    tarde = cliente.post(f"/corridas/{corrida['id']}/aceitar", headers=cabecalho(perto))
+    assert tarde.status_code == 403, "a oferta ja e de outro motorista"
+
+
+def test_aceite_depois_do_prazo_e_recusado():
+    from datetime import timedelta
+    from infra.modelos import Oferta
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    sessao = _sessao()
+    try:
+        oferta = sessao.query(Oferta).filter_by(corrida_id=corrida["id"]).one()
+        oferta.expira_em = oferta.expira_em - timedelta(seconds=60)
+        sessao.commit()
+    finally:
+        sessao.close()
+    r = cliente.post(f"/corridas/{corrida['id']}/aceitar", headers=cabecalho(motorista))
+    assert r.status_code == 409 and "expirou" in r.text
+
+
+def test_passageiro_nao_responde_a_oferta():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    for acao in ("aceitar", "recusar"):
+        assert cliente.post(f"/corridas/{corrida['id']}/{acao}",
+                            headers=cabecalho(passageiro)).status_code == 403
+
+
+def test_cancelar_durante_a_oferta_libera_o_motorista():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = pedir_corrida(passageiro, aceitar=False).json()
+    assert cliente.post(f"/corridas/{corrida['id']}/cancelar",
+                        headers=cabecalho(passageiro)).json()["estado"] == E.CANCELADA
+    assert cliente.post(f"/corridas/{corrida['id']}/aceitar",
+                        headers=cabecalho(motorista)).status_code == 409
+    outro = novo_passageiro()
+    nova = pedir_corrida(outro, aceitar=False).json()
+    assert _motorista_de(nova) == motorista, "o motorista voltou para o pool"
 
 
 def main():

@@ -79,6 +79,8 @@ class Corrida(Base):
     # nao derivado do id: quem tem o link de uma corrida nao adivinha outra.
     token_compartilhar: Mapped[str | None] = mapped_column(String(40), nullable=True,
                                                            unique=True, index=True)
+    # Por que foi cancelada, quando nao foi o passageiro (ex.: ninguem aceitou).
+    motivo_cancelamento: Mapped[str | None] = mapped_column(String(80), nullable=True)
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
     atualizada_em: Mapped[datetime] = mapped_column(DateTime, default=agora,
                                                     onupdate=agora)
@@ -179,3 +181,30 @@ class Mensagem(Base):
     autor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
     texto: Mapped[str] = mapped_column(String(500))
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Oferta(Base):
+    """Oferta de uma corrida a UM motorista, com prazo para aceitar.
+
+    Enquanto a corrida esta em `alocacao`, ela e oferecida a um motorista por
+    vez, do menor ETA para o maior. Recusar ou deixar expirar passa a oferta
+    ao proximo SEM mudar o estado da corrida: um laco alocacao -> alocacao
+    seria um ciclo, e o DAG validado por Kahn nao admite ciclo. Esta tabela e
+    a auditoria das tentativas.
+
+    status: pendente -> aceita | recusada | expirada | cancelada. A troca e
+    sempre `UPDATE ... WHERE status = 'pendente'` com checagem de rowcount:
+    se o motorista aceita no mesmo instante em que a oferta expira, so um
+    dos dois vence.
+    """
+
+    __tablename__ = "ofertas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    corrida_id: Mapped[int] = mapped_column(ForeignKey("corridas.id"), index=True)
+    motorista_id: Mapped[int] = mapped_column(ForeignKey("motoristas.id"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="pendente", index=True)
+    eta_segundos: Mapped[float | None] = mapped_column(Float, nullable=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime)
+    respondida_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

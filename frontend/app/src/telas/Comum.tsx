@@ -136,7 +136,7 @@ export function PinoCentral({ movendo, tipo, base }: { movendo: boolean; tipo: '
  */
 export const ETAPAS: { chave: EstadoCorrida; nome: string; nota: string }[] = [
   { chave: 'pedido', nome: 'Pedido', nota: 'registrado' },
-  { chave: 'alocacao', nome: 'Motorista', nota: 'busca reversa no grafo' },
+  { chave: 'alocacao', nome: 'Motorista', nota: 'oferta e aceite' },
   { chave: 'rota', nome: 'Rota', nota: 'A* com marcos (ALT)' },
   { chave: 'em_curso', nome: 'Viagem', nota: 'em andamento' },
   { chave: 'concluida', nome: 'Chegada', nota: 'concluída' },

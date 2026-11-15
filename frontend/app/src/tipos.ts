@@ -126,6 +126,11 @@ export interface Corrida {
   paradas: Parada[]
   /** Só o passageiro recebe; null = ainda não compartilhada. */
   token_compartilhar: string | null
+  /** Em `alocacao`: a corrida foi OFERECIDA e espera o motorista aceitar. */
+  aguardando_aceite: boolean
+  /** Prazo restante da oferta, medido no servidor. */
+  oferta_segundos: number | null
+  motivo_cancelamento: string | null
   passageiro_nome: string | null
   origem: LatLon | null
   destino: LatLon | null

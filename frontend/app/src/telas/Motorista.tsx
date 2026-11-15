@@ -10,6 +10,7 @@ import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Odometro, TextoRevelado } from '../ui/Movimento'
 import { AvaliarCorrida, NotaMedia } from '../ui/Estrelas'
 import { Busca } from './Busca'
+import { BarraPrazo, usePrazo } from '../ui/Prazo'
 import { TelaChat } from './Chat'
 import { TelaHistorico } from './Historico'
 import { TelaPerfil } from './Perfil'
@@ -48,7 +49,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [alternando, definirAlternando] = useState(false)
   const [corridaId, definirCorridaId] = useState<number | null>(null)
   const [corrida, definirCorrida] = useState<Corrida | null>(null)
-  const [chegou, definirChegou] = useState(false)
+  const [respondendo, definirRespondendo] = useState<'aceitar' | 'recusar' | null>(null)
   const [trajeto, definirTrajeto] = useState<Rota | null>(null)
   const [enderecos, definirEnderecos] = useState<{ origem?: Lugar; destino?: Lugar }>({})
   const [simulacao, definirSimulacao] = useState<{ passo: number; total: number } | null>(null)
@@ -78,6 +79,40 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   useEffect(() => { definirNaoLidas(0) }, [corridaId])
   const estado: EstadoCorrida | null = aoVivo.estado ?? corrida?.estado ?? null
   const encerrada = estado != null && FINAIS.includes(estado)
+  const emOferta = Boolean(corrida && estado === 'alocacao' && corrida.aguardando_aceite)
+  const prazoOferta = usePrazo(emOferta && corrida ? corrida.oferta_segundos : null, corrida?.id)
+
+  // Prazo acabou sem resposta: o backend passa a corrida adiante em até 2 s.
+  // Reconsulta; o 403 que vem tira a oferta deste painel.
+  useEffect(() => {
+    if (!emOferta || prazoOferta > 0 || !corridaId) return
+    const id = setTimeout(() => api.consultarCorrida(token, corridaId).then(definirCorrida).catch((f: Error & { status?: number }) => {
+      if (f.status === 403) { definirCorridaId(null); definirCorrida(null) }
+    }), 2500)
+    return () => clearTimeout(id)
+  }, [emOferta, prazoOferta <= 0])
+
+  async function responderOferta(resposta: 'aceitar' | 'recusar') {
+    if (!corridaId) return
+    definirRespondendo(resposta)
+    definirErro(null)
+    try {
+      if (resposta === 'aceitar') {
+        definirCorrida(await api.aceitarOferta(token, corridaId))
+        vibrar([20, 60, 20])
+      } else {
+        await api.recusarOferta(token, corridaId)
+        definirCorridaId(null); definirCorrida(null)
+        vibrar(15)
+      }
+    } catch (f) {
+      definirErro((f as Error).message)
+      // Oferta já vencida ou de outro: some daqui.
+      definirCorridaId(null); definirCorrida(null)
+    } finally {
+      definirRespondendo(null)
+    }
+  }
   const indoAoDestino = estado === 'em_curso'
 
   // Ganhos do dia: atualizados ao entrar e a cada corrida que termina.
@@ -95,9 +130,9 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
       const ativa = resposta.corrida_ativa
       if (ativa && ativa !== corridaIdRef.current) {
         definirCorridaId(ativa)
-        definirChegou(true)
+
         vibrar([80, 60, 80, 60, 160])
-        setTimeout(() => definirChegou(false), 2600)
+
       }
       return resposta
     } catch (falha) {
@@ -138,7 +173,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   // ---- corrida atribuída
   useEffect(() => {
     if (!corridaId) { definirCorrida(null); definirTrajeto(null); definirEnderecos({}); return }
-    api.consultarCorrida(token, corridaId).then(definirCorrida).catch(() => {})
+    api.consultarCorrida(token, corridaId).then(definirCorrida).catch((f: Error & { status?: number }) => {
+      // 403: a oferta venceu ou foi recusada e a corrida passou a outro
+      // motorista. Ela deixa de ser deste painel.
+      if (f.status === 403) { definirCorridaId(null); definirCorrida(null) }
+    })
   }, [corridaId, aoVivo.versao])
 
   useEffect(() => {
@@ -325,12 +364,12 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
         )}
       </Folha>
 
-      {/* Chegada de corrida: o cartão invade a tela por um instante. */}
+      {/* Oferta de corrida: o cartão invade a tela e fica até o motorista
+          responder ou o prazo acabar. Recusar passa a corrida ao próximo. */}
       <AnimatePresence>
-        {chegou && corrida && (
-          <motion.div className="chegada-corrida" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                      onClick={() => definirChegou(false)}>
-            <motion.div className="chegada-cartao"
+        {emOferta && corrida && (
+          <motion.div className="chegada-corrida" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="chegada-cartao" role="dialog" aria-label="Oferta de corrida"
                         initial={{ y: 300, scale: 0.6, rotate: -8 }}
                         animate={{ y: 0, scale: 1, rotate: [0, 3, -3, 2, -1, 0] }}
                         exit={{ y: 120, scale: 0.8, opacity: 0 }}
@@ -339,12 +378,20 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
               <Icone nome="carro" tamanho={40} traco={1.6} />
               <TextoRevelado className="titulo-folha" texto="Nova corrida!" />
               <span className="chegada-valor"><Odometro texto={reais(corrida.custo_estimado)} /></span>
-              {corrida.eta_segundos != null && (
-                <span className="chegada-detalhes"><span>Embarque a <b>{textoDuracao(corrida.eta_segundos)}</b></span></span>
-              )}
-              <small>
-                {corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} <NotaMedia nota={corrida.passageiro_nota} /> está esperando · toque para ver
-              </small>
+              <div className="oferta-linhas">
+                {corrida.eta_segundos != null && <span><Icone nome="relogio" tamanho={14} /> Embarque a <b>{textoDuracao(corrida.eta_segundos)}</b></span>}
+                <span><Icone nome="usuario" tamanho={14} /> <b>{corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'}</b> <NotaMedia nota={corrida.passageiro_nota} /></span>
+                {corrida.destino_texto && <span><Icone nome="bandeira" tamanho={14} /> {corrida.destino_texto}</span>}
+                {corrida.paradas.length > 0 && <span><Icone nome="pino" tamanho={14} /> {corrida.paradas.length} {corrida.paradas.length === 1 ? 'parada' : 'paradas'} no caminho</span>}
+              </div>
+              <BarraPrazo restante={prazoOferta} total={Math.max(20, corrida.oferta_segundos ?? 0)} />
+              <span className="oferta-segundos">{Math.ceil(prazoOferta)} s para responder</span>
+              <div className="oferta-acoes">
+                <Botao variante="secundario" carregando={respondendo === 'recusar'} disabled={respondendo != null}
+                       onClick={() => responderOferta('recusar')}>Recusar</Botao>
+                <Botao carregando={respondendo === 'aceitar'} disabled={respondendo != null}
+                       onClick={() => responderOferta('aceitar')}>Aceitar</Botao>
+              </div>
             </motion.div>
           </motion.div>
         )}

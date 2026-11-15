@@ -9,7 +9,7 @@ ficaria parada. Com `def`, o FastAPI os executa num threadpool.
 
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -77,6 +77,11 @@ def _saida(sessao, corrida, grafo, usuario=None):
         saida.minha_avaliacao = avaliacoes.nota_dada(sessao, corrida.id, usuario.id)
     saida.paradas = [ParadaSaida(lat=p.lat, lon=p.lon, texto=p.texto)
                      for p in paradas_da_corrida(sessao, corrida.id)]
+    if corrida.estado == E.ALOCACAO:
+        oferta = servico.oferta_pendente(sessao, corrida.id)
+        if oferta is not None:
+            saida.aguardando_aceite = True
+            saida.oferta_segundos = round(servico.segundos_para_responder(oferta), 1)
     if usuario is None or usuario.id != corrida.passageiro_id:
         saida.token_compartilhar = None
     for campo, no in (("origem", corrida.no_origem), ("destino", corrida.no_destino)):
@@ -132,9 +137,10 @@ def pedir_corrida(dados: CorridaEntrada,
                                  texto=(parada.texto or "").strip() or None))
 
     try:
-        servico.alocar_motorista(sessao, grafo, registro, corrida, cfg)
-        servico.definir_rota(sessao, grafo, corrida, alt=alt, geometria=geometria,
-                             categoria=dados.categoria, paradas=nos_paradas)
+        # Preco antes da oferta: o motorista ve o valor para decidir.
+        servico.calcular_preco(grafo, corrida, alt=alt, geometria=geometria,
+                               categoria=dados.categoria, paradas=nos_paradas)
+        servico.oferecer(sessao, grafo, registro, corrida, cfg)
     except servico.SemMotoristaDisponivel as erro:
         _transitar_ou_409(sessao, corrida, E.CANCELADA)
         comitar_e_publicar(sessao, conexoes, corrida)
@@ -252,9 +258,57 @@ def cancelar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
              grafo=Depends(obter_grafo)):
     corrida = _carregar(sessao, corrida_id, usuario)
     _transitar_ou_409(sessao, corrida, E.CANCELADA)
+    oferta = servico.oferta_pendente(sessao, corrida.id)
+    if oferta is not None:
+        servico._fechar_oferta(sessao, oferta, "cancelada", servico.agora_utc())
     servico.liberar_motorista(sessao, registro, corrida.motorista_id)
     comitar_e_publicar(sessao, conexoes, corrida)
     return _saida(sessao, corrida, grafo, usuario)
+
+
+# ------------------------------------------------------------------ oferta
+
+def _motorista_da_oferta(sessao, usuario):
+    motorista = (sessao.query(Motorista).filter_by(usuario_id=usuario.id).one_or_none()
+                 if usuario.tipo == "motorista" else None)
+    if motorista is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "so o motorista responde a oferta")
+    return motorista
+
+
+@rotas.post("/{corrida_id}/aceitar", response_model=CorridaSaida)
+def aceitar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
+            sessao: Session = Depends(obter_sessao),
+            conexoes=Depends(obter_conexoes), grafo=Depends(obter_grafo)):
+    """O motorista aceita a oferta aberta, dentro do prazo: alocacao -> rota."""
+    motorista = _motorista_da_oferta(sessao, usuario)
+    corrida = _carregar(sessao, corrida_id, usuario)
+    try:
+        servico.aceitar_oferta(sessao, corrida, motorista)
+    except servico.OfertaInvalida as erro:
+        sessao.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
+    comitar_e_publicar(sessao, conexoes, corrida)
+    return _saida(sessao, corrida, grafo, usuario)
+
+
+@rotas.post("/{corrida_id}/recusar", status_code=status.HTTP_204_NO_CONTENT)
+def recusar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
+            sessao: Session = Depends(obter_sessao), registro=Depends(obter_registro),
+            conexoes=Depends(obter_conexoes), grafo=Depends(obter_grafo), cfg=Depends(config)):
+    """O motorista recusa: a corrida e oferecida ao proximo do ranking.
+
+    204 sem corpo: quem recusou deixa de participar da corrida e nao a ve mais.
+    """
+    motorista = _motorista_da_oferta(sessao, usuario)
+    corrida = _carregar(sessao, corrida_id, usuario)
+    try:
+        servico.recusar_oferta(sessao, grafo, registro, corrida, motorista, cfg)
+    except servico.OfertaInvalida as erro:
+        sessao.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
+    comitar_e_publicar(sessao, conexoes, corrida)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ------------------------------------------------------- historico e notas

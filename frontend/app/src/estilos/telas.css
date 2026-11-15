@@ -257,3 +257,14 @@
 .marca-acompanhar { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 99px; background: var(--vidro); backdrop-filter: blur(10px); font: 700 16px 'Space Grotesk', sans-serif; box-shadow: var(--sombra-suave); }
 .marca-acompanhar b { color: var(--vermelho); }
 .acompanhar-destino { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texto-dim); }
+
+/* ---- prazo da oferta */
+.barra-prazo { height: 6px; border-radius: 99px; background: var(--cartao-alto); overflow: hidden; }
+.barra-prazo span { display: block; height: 100%; background: var(--verde); transform-origin: left; border-radius: 99px; }
+.barra-prazo span.urgente { background: var(--vermelho); }
+.oferta-acoes { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; width: 100%; margin-top: 4px; }
+.oferta-linhas { width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 13.5px; color: var(--texto-dim); }
+.oferta-linhas b { color: var(--texto); }
+.oferta-segundos { font: 700 13px 'IBM Plex Mono', monospace; color: var(--texto-dim); }
+/* O cartão centraliza os filhos (align-items: center): sem largura própria a barra encolheria a zero. */
+.chegada-cartao .barra-prazo { width: 100%; }

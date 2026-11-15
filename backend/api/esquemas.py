@@ -95,6 +95,10 @@ class CorridaSaida(BaseModel):
     paradas: list[ParadaSaida] = []
     # So o passageiro ve o token: e ele quem decide com quem compartilhar.
     token_compartilhar: str | None = None
+    # Em `alocacao`: oferta aberta a um motorista, esperando o aceite.
+    aguardando_aceite: bool = False
+    oferta_segundos: float | None = None      # prazo restante, medido no servidor
+    motivo_cancelamento: str | None = None
     origem: tuple[float, float] | None = None       # cruzamento de embarque
     destino: tuple[float, float] | None = None
 

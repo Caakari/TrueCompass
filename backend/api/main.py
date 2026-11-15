@@ -170,9 +170,47 @@ async def ciclo_de_vida(app: FastAPI):
     app.state.conexoes.registrar_loop(asyncio.get_running_loop())
 
     criar_tabelas()
+    vigia = asyncio.create_task(vigiar_ofertas(app, config))
     registrador.info("TrueCompass pronto (ambiente: %s)", config.ambiente)
     yield
+    vigia.cancel()
     registrador.info("encerrando")
+
+
+INTERVALO_VIGIA_S = 2.0
+
+
+def expirar_ofertas_agora(app, config):
+    """Uma passada: expira ofertas vencidas e publica DEPOIS do commit."""
+    from api.eventos import mensagem_estado
+    from dominio.servicos import corrida as servico
+    from infra.banco import Sessao
+
+    sessao = Sessao()
+    try:
+        mudaram = servico.expirar_ofertas(sessao, app.state.grafo, app.state.registro, config)
+        sessao.commit()
+        for corrida in mudaram:
+            app.state.conexoes.publicar(corrida.id, mensagem_estado(corrida))
+        return mudaram
+    except Exception:
+        sessao.rollback()
+        registrador.exception("falha ao expirar ofertas")
+        return []
+    finally:
+        sessao.close()
+
+
+async def vigiar_ofertas(app, config):
+    """Laco do processo: a cada 2 s, passa adiante as ofertas sem resposta.
+
+    O trabalho (consulta, busca reversa para o proximo motorista) roda numa
+    thread, para nao segurar o event loop -- a mesma regra dos endpoints que
+    tocam o grafo serem `def`.
+    """
+    while True:
+        await asyncio.sleep(INTERVALO_VIGIA_S)
+        await asyncio.to_thread(expirar_ofertas_agora, app, config)
 
 
 def criar_app():

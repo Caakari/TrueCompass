@@ -16,6 +16,7 @@ import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Esqueleto, Odometro, Reticencias, TextoRevelado } from '../ui/Movimento'
 import { AvaliarCorrida } from '../ui/Estrelas'
+import { BarraPrazo, usePrazo } from '../ui/Prazo'
 import { TelaChat } from './Chat'
 import { Busca, guardarRecente, lerRecentes, type Campo } from './Busca'
 import { NOME_CATEGORIA, PAGAMENTOS, TelaHistorico } from './Historico'
@@ -355,7 +356,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
     : destino ? rumoVerdadeiro(de, destino) : null
 
   const titulos: Partial<Record<string, string>> = {
-    procurando: 'Procurando motorista', alocacao: 'Motorista a caminho', rota: 'Motorista a caminho',
+    procurando: 'Procurando motorista', alocacao: 'Aguardando confirmação', rota: 'Motorista a caminho',
     em_curso: 'Em viagem', concluida: 'Você chegou',
   }
   const titulo = fase === 'procurando' ? titulos.procurando! : fase === 'corrida' && estado ? titulos[estado] ?? null : null
@@ -778,6 +779,30 @@ function EmCorrida({ corrida, estado, destino, rotaMotorista, categoria, conecta
   const eta = rotaMotorista?.segundos ?? corrida.eta_segundos
   const minutos = eta != null ? Math.max(1, Math.round(eta / 60)) : null
   const aCaminho = estado === 'alocacao' || estado === 'rota'
+  // Oferta aberta: o motorista ainda não aceitou. Ao recusar ou deixar
+  // vencer, o backend oferece ao próximo e o estado chega pelo WebSocket.
+  const aguardando = estado === 'alocacao' && corrida.aguardando_aceite
+  const restante = usePrazo(aguardando ? corrida.oferta_segundos : null, corrida.motorista_id)
+  if (aguardando) {
+    return (
+      <div className="conteudo">
+        <div className="status-corrida">
+          <small>Corrida oferecida a {corrida.motorista_nome?.split(' ')[0] ?? 'um motorista'}{minutos != null ? `, a ${minutos} min` : ''}</small>
+          <h2 className="titulo-folha">Aguardando confirmação<Reticencias /></h2>
+          <SeloAoVivo conectado={conectado} />
+        </div>
+        <BarraPrazo restante={restante} total={Math.max(20, corrida.oferta_segundos ?? 0)} />
+        <p className="texto-apoio esquerda">
+          O motorista mais próximo pelas ruas tem alguns segundos para aceitar. Se ele recusar, a corrida vai
+          para o próximo — sem você precisar pedir de novo.
+        </p>
+        <AnimatePresence>{erro && <Aviso tipo="erro">{erro}</Aviso>}</AnimatePresence>
+        <div className="acoes">
+          <Botao variante="perigo" carregando={ocupado} onClick={() => agir('cancelar')}>Cancelar pedido</Botao>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="conteudo">
       <div className="status-corrida">
@@ -840,7 +865,13 @@ function Fim({ estado, corrida, destino, novaCorrida, avaliar }: {
           )}
         </>
       )}
-      {!paga && <p className="texto-apoio">Nenhum valor foi cobrado.</p>}
+      {!paga && (
+        <p className="texto-apoio">
+          {corrida.motivo_cancelamento === 'nenhum motorista aceitou'
+            ? 'Nenhum motorista por perto aceitou a corrida a tempo. Nenhum valor foi cobrado — tente de novo em instantes.'
+            : 'Nenhum valor foi cobrado.'}
+        </p>
+      )}
       <Botao onClick={novaCorrida}>Nova corrida</Botao>
     </div>
   )

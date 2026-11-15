@@ -7,6 +7,7 @@ e submete toda mudanca de estado ao DAG.
 """
 
 import time
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import update
 
@@ -15,7 +16,7 @@ from algoritmos.contracao import Geometria
 from algoritmos.grafo import haversine, heuristica_haversine
 from algoritmos.matching import motoristas_mais_proximos
 from dominio import estados as E
-from infra.modelos import Corrida, CorridaTransicao, Motorista, Pagamento
+from infra.modelos import Corrida, CorridaTransicao, Motorista, Oferta, Pagamento
 
 TARIFA_BASE = 5.00
 POR_MINUTO = 0.80
@@ -278,15 +279,35 @@ def estimar_viagem(grafo, indice_nos, origem, destino, *, paradas=(), registro=N
 
 # --------------------------------------------------------------- alocacao
 
-def alocar_motorista(sessao, grafo, registro, corrida, config):
-    """Escolhe o motorista de menor ETA REAL e o reserva.
+class OfertaInvalida(Exception):
+    pass
+
+
+def agora_utc():
+    """Agora em UTC SEM fuso: e como o banco grava e devolve as datas."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def oferta_pendente(sessao, corrida_id):
+    return (sessao.query(Oferta)
+            .filter_by(corrida_id=corrida_id, status="pendente")
+            .order_by(Oferta.id.desc()).first())
+
+
+def oferecer(sessao, grafo, registro, corrida, config, agora=None):
+    """Oferece a corrida ao motorista de menor ETA REAL que ainda nao a recebeu.
 
     1. Indice espacial corta de milhares para ~20 candidatos plausiveis.
     2. UMA busca reversa da o tempo real de todos eles de uma vez.
-    3. A reserva e otimista: `UPDATE ... WHERE disponivel = 1`. Se afetou
-       zero linhas, outro pedido ganhou a corrida pelo mesmo motorista --
-       segue para o proximo do ranking, sem travar a tabela.
+    3. Quem ja recebeu esta corrida (recusou ou deixou expirar) sai da lista.
+    4. A reserva e otimista: `UPDATE ... WHERE disponivel = 1`. Se afetou
+       zero linhas, outro pedido ganhou o motorista -- segue para o proximo,
+       sem travar a tabela.
+
+    O motorista fica reservado (indisponivel) enquanto a oferta esta aberta:
+    sem isso, ele receberia duas ofertas ao mesmo tempo.
     """
+    agora = agora or agora_utc()
     lat, lon = grafo.coordenadas(corrida.no_origem)
     candidatos = registro.candidatos(lat, lon, config.raio_busca_m,
                                      config.max_candidatos)
@@ -297,10 +318,13 @@ def alocar_motorista(sessao, grafo, registro, corrida, config):
         grafo, corrida.no_origem, candidatos,
         limite_segundos=config.limite_matching_s,
     )
+    ja_ofertados = {m for (m,) in sessao.query(Oferta.motorista_id)
+                    .filter(Oferta.corrida_id == corrida.id)}
+    ranking = [c for c in ranking if c.motorista_id not in ja_ofertados]
     if not ranking:
         raise SemMotoristaDisponivel(
             "ha motoristas por perto, mas nenhum alcanca o passageiro a tempo"
-        )
+            if not ja_ofertados else "nenhum motorista aceitou a corrida")
 
     for candidato in ranking:
         afetadas = sessao.execute(
@@ -313,12 +337,98 @@ def alocar_motorista(sessao, grafo, registro, corrida, config):
             registro.definir_disponibilidade(candidato.motorista_id, False)
             corrida.motorista_id = candidato.motorista_id
             corrida.eta_segundos = candidato.eta_segundos
-            transitar(sessao, corrida, E.ALOCACAO)
+            sessao.add(Oferta(corrida_id=corrida.id, motorista_id=candidato.motorista_id,
+                              eta_segundos=candidato.eta_segundos,
+                              expira_em=agora + timedelta(seconds=config.prazo_oferta_s)))
+            if corrida.estado == E.PEDIDO:
+                transitar(sessao, corrida, E.ALOCACAO)
             return candidato
 
     raise SemMotoristaDisponivel(
         "todos os candidatos foram alocados a outros pedidos neste instante"
     )
+
+
+# Nome antigo, mantido: "alocar" hoje e "oferecer ao primeiro do ranking".
+alocar_motorista = oferecer
+
+
+def _fechar_oferta(sessao, oferta, novo_status, agora, exigir_prazo=False):
+    """pendente -> novo_status, de forma otimista. True se ESTA chamada fechou.
+
+    `exigir_prazo`: so fecha se a oferta ainda nao venceu (usado no aceite).
+    """
+    consulta = (update(Oferta)
+                .where(Oferta.id == oferta.id, Oferta.status == "pendente")
+                .values(status=novo_status, respondida_em=agora))
+    if exigir_prazo:
+        consulta = consulta.where(Oferta.expira_em > agora)
+    fechou = sessao.execute(consulta).rowcount == 1
+    if fechou:
+        oferta.status = novo_status
+    return fechou
+
+
+def _passar_adiante(sessao, grafo, registro, corrida, config, agora):
+    """Libera o motorista atual e oferece ao proximo; sem proximo, cancela."""
+    liberar_motorista(sessao, registro, corrida.motorista_id)
+    corrida.motorista_id = None
+    corrida.eta_segundos = None
+    try:
+        oferecer(sessao, grafo, registro, corrida, config, agora)
+    except SemMotoristaDisponivel:
+        corrida.motivo_cancelamento = "nenhum motorista aceitou"
+        transitar(sessao, corrida, E.CANCELADA)
+
+
+def aceitar_oferta(sessao, corrida, motorista, agora=None):
+    """O motorista da oferta aberta aceita dentro do prazo: alocacao -> rota."""
+    agora = agora or agora_utc()
+    oferta = oferta_pendente(sessao, corrida.id)
+    if corrida.estado != E.ALOCACAO or oferta is None or oferta.motorista_id != motorista.id:
+        raise OfertaInvalida("nao ha oferta aberta desta corrida para voce")
+    if not _fechar_oferta(sessao, oferta, "aceita", agora, exigir_prazo=True):
+        raise OfertaInvalida("a oferta expirou")
+    transitar(sessao, corrida, E.ROTA)
+    return oferta
+
+
+def recusar_oferta(sessao, grafo, registro, corrida, motorista, config, agora=None):
+    """O motorista recusa: a oferta vai para o proximo do ranking."""
+    agora = agora or agora_utc()
+    oferta = oferta_pendente(sessao, corrida.id)
+    if corrida.estado != E.ALOCACAO or oferta is None or oferta.motorista_id != motorista.id:
+        raise OfertaInvalida("nao ha oferta aberta desta corrida para voce")
+    if _fechar_oferta(sessao, oferta, "recusada", agora):
+        _passar_adiante(sessao, grafo, registro, corrida, config, agora)
+    return oferta
+
+
+def expirar_ofertas(sessao, grafo, registro, config, agora=None):
+    """Ofertas vencidas sem resposta: passa cada corrida adiante.
+
+    Chamada periodicamente pelo servidor (laco no `lifespan`). Devolve as
+    corridas que mudaram, para quem chamou publicar DEPOIS do commit.
+    """
+    agora = agora or agora_utc()
+    vencidas = (sessao.query(Oferta)
+                .filter(Oferta.status == "pendente", Oferta.expira_em <= agora).all())
+    mudaram = []
+    for oferta in vencidas:
+        corrida = sessao.get(Corrida, oferta.corrida_id)
+        if corrida is None or corrida.estado != E.ALOCACAO:
+            _fechar_oferta(sessao, oferta, "cancelada", agora)
+            continue
+        if _fechar_oferta(sessao, oferta, "expirada", agora):
+            _passar_adiante(sessao, grafo, registro, corrida, config, agora)
+            mudaram.append(corrida)
+    return mudaram
+
+
+def segundos_para_responder(oferta, agora=None):
+    """Prazo restante, calculado no servidor (relogio do celular nao e confiavel)."""
+    agora = agora or agora_utc()
+    return max(0.0, (oferta.expira_em - agora).total_seconds())
 
 
 def liberar_motorista(sessao, registro, motorista_id):
@@ -332,20 +442,29 @@ def liberar_motorista(sessao, registro, motorista_id):
 
 # ----------------------------------------------------------------- fluxo
 
-def definir_rota(sessao, grafo, corrida, alt=None, geometria=None,
-                 categoria=CATEGORIA_PADRAO, paradas=()):
-    """Calcula a rota da corrida e avanca o estado para `rota`.
+def calcular_preco(grafo, corrida, alt=None, geometria=None,
+                   categoria=CATEGORIA_PADRAO, paradas=()):
+    """Rota da corrida (pelas paradas) e o preco, gravado em `custo_estimado`.
 
     Os metros saem do TRACADO (`geometria`), exatamente como na previa: sem
     ela, numa malha contraida, cada curva viraria corda e a corrida cobraria
     menos do que o passageiro viu antes de confirmar.
+
+    Calculado no PEDIDO, antes do aceite: o motorista ve o valor na oferta.
     """
     nos = [corrida.no_origem, *paradas, corrida.no_destino]
     segundos, caminho = rota_por_paradas(grafo, nos, alt=alt)
     corrida.custo_estimado = estimar_custo(
         segundos, comprimento_metros(grafo, caminho, geometria), categoria)
-    transitar(sessao, corrida, E.ROTA)
     return segundos, caminho
+
+
+def definir_rota(sessao, grafo, corrida, alt=None, geometria=None,
+                 categoria=CATEGORIA_PADRAO, paradas=()):
+    """Preco e rota, e avanca para `rota` (fluxo sem aceite, usado em testes)."""
+    resultado = calcular_preco(grafo, corrida, alt, geometria, categoria, paradas)
+    transitar(sessao, corrida, E.ROTA)
+    return resultado
 
 
 def registrar_pagamento(sessao, corrida):

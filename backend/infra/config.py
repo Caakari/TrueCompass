@@ -75,6 +75,8 @@ class Config:
         self.limite_matching_s = float(os.getenv("MATCHING_LIMITE_S", str(15 * 60)))
         self.raio_busca_m = float(os.getenv("MATCHING_RAIO_M", "3000"))
         self.max_candidatos = int(os.getenv("MATCHING_MAX_CANDIDATOS", "20"))
+        # Tempo que o motorista tem para aceitar uma oferta de corrida.
+        self.prazo_oferta_s = float(os.getenv("OFERTA_PRAZO_S", "20"))
         self.ambiente = os.getenv("AMBIENTE", "desenvolvimento")
 
     @property

@@ -119,7 +119,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
 - `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (72), `test_ws.py` (15), `test_migracoes.py` (6)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (80), `test_ws.py` (16), `test_migracoes.py` (6)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -186,6 +186,24 @@ Decisões que valem manter:
   em tempo de execução, no primeiro cliente que tentar acompanhar.
 - Alocação de motorista é otimista: `UPDATE ... WHERE disponivel = 1` e
   checagem de `rowcount`. Se deu zero, outro pedido levou — tenta o próximo.
+- **Oferta com aceite**: `alocacao` significa "oferecida a UM motorista,
+  esperando o aceite" (prazo `OFERTA_PRAZO_S`, padrão 20 s). Aceitar:
+  `alocacao → rota`. Recusar ou deixar vencer passa ao próximo do ranking **sem
+  mudar de estado** — um laço `alocacao → alocacao` seria ciclo, e o DAG
+  validado por Kahn não admite. As tentativas ficam na tabela `ofertas`
+  (auditoria). Ninguém aceitou: `alocacao → cancelada`, com
+  `motivo_cancelamento`. Quem já recebeu a corrida não a recebe de novo.
+- A troca de status da oferta é `UPDATE ... WHERE status = 'pendente'` com
+  `rowcount`, nos dois lados: se o aceite e a expiração chegam juntos, só um
+  vence. O aceite exige `expira_em > agora` no mesmo UPDATE.
+- O preço é calculado no PEDIDO (`calcular_preco`), antes do aceite: o
+  motorista vê o valor na oferta.
+- Ofertas vencidas: laço no `lifespan` a cada 2 s (`vigiar_ofertas`), com o
+  trabalho numa thread (`asyncio.to_thread`) e publicação DEPOIS do commit. Os
+  testes fecham as ofertas pendentes entre um teste e outro: o laço roda
+  durante a suíte e passaria adiante a oferta de um teste no meio do seguinte.
+- O prazo restante (`oferta_segundos`) é medido no SERVIDOR; o app só desconta o
+  que passa no aparelho desde a resposta (relógio do celular não entra).
 - A quadtree é a implementação de produção; `IndiceLinear` permanece como
   **oráculo** nos testes (mesma estratégia do Dijkstra validando o A*).
 - Quadtree exige **teto de profundidade**: pontos em coordenada idêntica

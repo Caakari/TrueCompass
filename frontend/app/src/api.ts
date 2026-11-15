@@ -144,6 +144,9 @@ export const api = {
         paradas: paradas.map((p) => ({ lat: p.lat, lon: p.lon, texto: textoDoLugar(p) })),
       },
     }),
+  // Oferta: o motorista tem alguns segundos para aceitar; recusar passa ao próximo.
+  aceitarOferta: (token: string, id: number) => pedir<Corrida>(`/corridas/${id}/aceitar`, { metodo: 'POST', token }),
+  recusarOferta: (token: string, id: number) => pedir<null>(`/corridas/${id}/recusar`, { metodo: 'POST', token }),
   mensagens: (token: string, id: number) => pedir<Mensagem[]>(`/corridas/${id}/mensagens`, { token }),
   enviarMensagem: (token: string, id: number, texto: string) =>
     pedir<Mensagem>(`/corridas/${id}/mensagens`, { metodo: 'POST', token, corpo: { texto } }),

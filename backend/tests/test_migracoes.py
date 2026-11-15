@@ -71,7 +71,7 @@ def test_tabelas_novas_sao_criadas_pelo_create_all():
         Base.metadata.create_all(engine)
         migrar(engine, Base.metadata)
         tabelas = set(inspect(engine).get_table_names())
-        assert {"locais_salvos", "avaliacoes", "corrida_paradas", "mensagens"} <= tabelas
+        assert {"locais_salvos", "avaliacoes", "corrida_paradas", "mensagens", "ofertas"} <= tabelas
     finally:
         engine.dispose()
         os.unlink(caminho)
