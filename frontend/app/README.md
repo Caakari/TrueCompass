@@ -53,6 +53,9 @@ src/
 | Escolha da viagem | Três categorias com preço e chegada; botão fixo; a rota visível no mapa |
 | Corrida | "Chega em N min", cartão do motorista (corridas concluídas, categoria, placa, carro) |
 | Motorista | Botão Iniciar/Pausar, ganhos e corridas de hoje, chegada de corrida |
+| Perfil | Cor do avatar, nome, telefone, carro (motorista), nota média e locais salvos |
+| Suas viagens | Histórico com endereços, categoria, pagamento, valor e avaliação pendente |
+| Fim da corrida | Avaliação de 1 a 5 estrelas, com comentário opcional, dos dois lados |
 
 ## As animações, e o que cada uma representa
 

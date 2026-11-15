@@ -51,6 +51,10 @@ interface Props {
   aoUsarLocalizacao?: (campo: Campo) => Campo | void
   aoEscolherNoMapa?: (campo: Campo) => void
   aoFechar: () => void
+  /** Título da tela e texto do campo, quando a busca serve a outra coisa
+   *  (ex.: definir o endereço de Casa). */
+  titulo?: string
+  rotulo?: string
 }
 
 /**
@@ -59,7 +63,7 @@ interface Props {
  */
 export function Busca({
   token, campoInicial, campos, valores, perto, gpsDisponivel = false,
-  aoEscolher, aoUsarLocalizacao, aoEscolherNoMapa, aoFechar,
+  aoEscolher, aoUsarLocalizacao, aoEscolherNoMapa, aoFechar, titulo, rotulo,
 }: Props) {
   const [campo, definirCampo] = useState<Campo>(campoInicial)
   const [textos, definirTextos] = useState<Partial<Record<Campo, string>>>({})
@@ -96,7 +100,7 @@ export function Busca({
           <Icone nome="voltar" tamanho={24} />
         </motion.button>
         <motion.div className="busca-titulo" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.18 } }}>
-          {campos.length > 1 ? 'Sua viagem' : 'Sua posição'}
+          {titulo ?? (campos.length > 1 ? 'Sua viagem' : 'Sua posição')}
         </motion.div>
       </div>
 
@@ -117,7 +121,7 @@ export function Busca({
                                        transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}
                 <input ref={(el) => { entradas.current[nome] = el }}
                        value={textos[nome] ?? ''}
-                       placeholder={valor ? valor.titulo : ROTULOS[nome]}
+                       placeholder={valor ? valor.titulo : (rotulo ?? ROTULOS[nome])}
                        className={valor ? 'tem-valor' : ''}
                        aria-label={ROTULOS[nome]}
                        onFocus={() => definirCampo(nome)}

@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from api.deps import (config, obter_alt, obter_conexoes, obter_geometria, obter_grafo,
                       obter_indice_nos, obter_registro, usuario_atual)
-from api.esquemas import CorridaEntrada, CorridaSaida, RotaSaida
+from api.esquemas import (AvaliacaoEntrada, CorridaEntrada, CorridaSaida, HistoricoItem,
+                          RotaSaida)
 from api.eventos import comitar_e_publicar
 from dominio import estados as E
+from dominio.servicos import avaliacao as avaliacoes
 from dominio.servicos import corrida as servico
 from infra.banco import obter_sessao
 from infra.modelos import Corrida, Motorista, Usuario
@@ -44,18 +46,27 @@ def corridas_concluidas(sessao, motorista_id):
             .scalar()) or 0
 
 
-def _saida(sessao, corrida, grafo):
-    """CorridaSaida com o que o app mostra no card: nomes, placa, pontos."""
+def _saida(sessao, corrida, grafo, usuario=None):
+    """CorridaSaida com o que o app mostra no card: nomes, placa, notas, pontos.
+
+    `usuario` (quem pergunta) preenche `minha_avaliacao`.
+    """
     saida = CorridaSaida.model_validate(corrida, from_attributes=True)
     passageiro = sessao.get(Usuario, corrida.passageiro_id)
     saida.passageiro_nome = passageiro.nome if passageiro else None
+    saida.passageiro_nota = avaliacoes.nota_media(sessao, corrida.passageiro_id)[0]
     if corrida.motorista_id is not None:
         motorista = sessao.get(Motorista, corrida.motorista_id)
         if motorista is not None:
             saida.motorista_placa = motorista.placa
             saida.motorista_modelo = motorista.modelo or None
+            saida.motorista_cor_carro = motorista.cor_carro
             saida.motorista_nome = motorista.usuario.nome if motorista.usuario else None
             saida.motorista_corridas = corridas_concluidas(sessao, motorista.id)
+            saida.motorista_nota, saida.motorista_avaliacoes = avaliacoes.nota_media(
+                sessao, motorista.usuario_id)
+    if usuario is not None:
+        saida.minha_avaliacao = avaliacoes.nota_dada(sessao, corrida.id, usuario.id)
     for campo, no in (("origem", corrida.no_origem), ("destino", corrida.no_destino)):
         if no in grafo.nos:
             setattr(saida, campo, grafo.coordenadas(no))
@@ -96,7 +107,10 @@ def pedir_corrida(dados: CorridaEntrada,
                             "coordenadas fora da area coberta pela malha")
 
     corrida = Corrida(passageiro_id=usuario.id, no_origem=origem, no_destino=destino,
-                      estado=E.ESTADO_INICIAL)
+                      estado=E.ESTADO_INICIAL, categoria=dados.categoria,
+                      forma_pagamento=dados.forma_pagamento,
+                      origem_texto=(dados.origem_texto or "").strip() or None,
+                      destino_texto=(dados.destino_texto or "").strip() or None)
     sessao.add(corrida)
     sessao.flush()
 
@@ -115,14 +129,14 @@ def pedir_corrida(dados: CorridaEntrada,
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(erro))
 
     comitar_e_publicar(sessao, conexoes, corrida)
-    return _saida(sessao, corrida, grafo)
+    return _saida(sessao, corrida, grafo, usuario)
 
 
 @rotas.get("/{corrida_id}", response_model=CorridaSaida)
 def consultar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
               sessao: Session = Depends(obter_sessao),
               grafo=Depends(obter_grafo)):
-    return _saida(sessao, _carregar(sessao, corrida_id, usuario), grafo)
+    return _saida(sessao, _carregar(sessao, corrida_id, usuario), grafo, usuario)
 
 
 @rotas.get("/{corrida_id}/rota", response_model=RotaSaida)
@@ -181,7 +195,7 @@ def iniciar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
     corrida = _carregar(sessao, corrida_id, usuario)
     _transitar_ou_409(sessao, corrida, E.EM_CURSO)
     comitar_e_publicar(sessao, conexoes, corrida)
-    return _saida(sessao, corrida, grafo)
+    return _saida(sessao, corrida, grafo, usuario)
 
 
 @rotas.post("/{corrida_id}/finalizar", response_model=CorridaSaida)
@@ -194,7 +208,7 @@ def finalizar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
     _transitar_ou_409(sessao, corrida, E.CONCLUIDA)
     servico.liberar_motorista(sessao, registro, corrida.motorista_id)
     comitar_e_publicar(sessao, conexoes, corrida)
-    return _saida(sessao, corrida, grafo)
+    return _saida(sessao, corrida, grafo, usuario)
 
 
 @rotas.post("/{corrida_id}/pagamento", response_model=CorridaSaida)
@@ -209,7 +223,7 @@ def pagar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
     except E.TransicaoInvalida as erro:
         raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
     comitar_e_publicar(sessao, conexoes, corrida)
-    return _saida(sessao, corrida, grafo)
+    return _saida(sessao, corrida, grafo, usuario)
 
 
 @rotas.post("/{corrida_id}/cancelar", response_model=CorridaSaida)
@@ -222,4 +236,57 @@ def cancelar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
     _transitar_ou_409(sessao, corrida, E.CANCELADA)
     servico.liberar_motorista(sessao, registro, corrida.motorista_id)
     comitar_e_publicar(sessao, conexoes, corrida)
-    return _saida(sessao, corrida, grafo)
+    return _saida(sessao, corrida, grafo, usuario)
+
+
+# ------------------------------------------------------- historico e notas
+
+@rotas.get("", response_model=list[HistoricoItem])
+def historico(limite: int = 20, antes_de: int | None = None,
+              usuario: Usuario = Depends(usuario_atual),
+              sessao: Session = Depends(obter_sessao)):
+    """Corridas de quem pergunta, da mais recente para a mais antiga.
+
+    Paginacao por CURSOR (`antes_de` = menor id ja recebido), nao por offset:
+    corrida nova chegando no meio da rolagem nao desloca a lista nem repete itens.
+    """
+    limite = max(1, min(limite, 50))
+    motorista = (sessao.query(Motorista).filter_by(usuario_id=usuario.id).one_or_none()
+                 if usuario.tipo == "motorista" else None)
+    consulta = sessao.query(Corrida)
+    if motorista is not None:
+        consulta = consulta.filter(Corrida.motorista_id == motorista.id)
+    else:
+        consulta = consulta.filter(Corrida.passageiro_id == usuario.id)
+    if antes_de is not None:
+        consulta = consulta.filter(Corrida.id < antes_de)
+    itens = []
+    for corrida in consulta.order_by(Corrida.id.desc()).limit(limite):
+        if motorista is not None:
+            outro = sessao.get(Usuario, corrida.passageiro_id)
+        elif corrida.motorista_id is not None:
+            outro = sessao.get(Motorista, corrida.motorista_id).usuario
+        else:
+            outro = None
+        item = HistoricoItem.model_validate(corrida, from_attributes=True)
+        item.outro_nome = outro.nome if outro else None
+        item.minha_avaliacao = avaliacoes.nota_dada(sessao, corrida.id, usuario.id)
+        itens.append(item)
+    return itens
+
+
+@rotas.post("/{corrida_id}/avaliacao", response_model=CorridaSaida)
+def avaliar(corrida_id: int, dados: AvaliacaoEntrada,
+            usuario: Usuario = Depends(usuario_atual),
+            sessao: Session = Depends(obter_sessao),
+            grafo=Depends(obter_grafo)):
+    """Nota de 1 a 5 ao outro lado, depois que a corrida chegou ao fim."""
+    corrida = _carregar(sessao, corrida_id, usuario)
+    try:
+        avaliacoes.avaliar(sessao, corrida, usuario, dados.nota, dados.comentario)
+    except avaliacoes.AvaliacaoRepetida as erro:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
+    except avaliacoes.AvaliacaoInvalida as erro:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(erro))
+    sessao.commit()
+    return _saida(sessao, corrida, grafo, usuario)

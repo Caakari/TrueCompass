@@ -8,7 +8,10 @@ import type { Corrida, EstadoCorrida, LatLon, Lugar, Malha, Ponto, ResumoMotoris
 import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Odometro, TextoRevelado } from '../ui/Movimento'
+import { AvaliarCorrida, NotaMedia } from '../ui/Estrelas'
 import { Busca } from './Busca'
+import { TelaHistorico } from './Historico'
+import { TelaPerfil } from './Perfil'
 import {
   BarraTopo, CabecaMenu, ControlesMapa, ItemMenu, LinhaDeEstados, SeloAoVivo, SeloFinal,
 } from './Comum'
@@ -54,6 +57,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [mostrarMalha, definirMostrarMalha] = useState(false)
   const [semTiles, definirSemTiles] = useState(false)
   const [resumo, definirResumo] = useState<ResumoMotorista | null>(null)
+  const [painel, definirPainel] = useState<'perfil' | 'historico' | null>(null)
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const cronometro = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const ultimaSimulada = useRef<Ponto | null>(null)
@@ -270,6 +274,8 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
                  menu={(fechar) => (
                    <>
                      <CabecaMenu icone="carro" titulo="Motorista" detalhe={online ? 'disponível para corridas' : 'offline'} />
+                     <ItemMenu icone="usuario" onClick={() => { fechar(); definirPainel('perfil') }}>Perfil e carro</ItemMenu>
+                     <ItemMenu icone="relogio" onClick={() => { fechar(); definirPainel('historico') }}>Suas corridas</ItemMenu>
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
                      <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha e semáforos</ItemMenu>
                      <ItemMenu icone="sair" perigo onClick={() => { fechar(); sair() }}>Sair</ItemMenu>
@@ -297,6 +303,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
         )}
         {fase === 'encerrada' && (
           <Encerrada estado={estado} corrida={corrida}
+                     avaliar={async (nota, comentario) => {
+                       if (!corridaId) return
+                       definirCorrida(await api.avaliar(token, corridaId, nota, comentario))
+                       vibrar([10, 40, 10])
+                     }}
                      voltar={() => { definirCorridaId(null); definirErro(null); definirConfete(null) }} />
         )}
       </Folha>
@@ -318,7 +329,9 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
               {corrida.eta_segundos != null && (
                 <span className="chegada-detalhes"><span>Embarque a <b>{textoDuracao(corrida.eta_segundos)}</b></span></span>
               )}
-              <small>{corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} está esperando · toque para ver</small>
+              <small>
+                {corrida.passageiro_nome?.split(' ')[0] ?? 'Passageiro'} <NotaMedia nota={corrida.passageiro_nota} /> está esperando · toque para ver
+              </small>
             </motion.div>
           </motion.div>
         )}
@@ -331,6 +344,11 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
                  aoEscolher={(_c, lugar) => { definirPosicao(lugar); definirBusca(false) }}
                  aoFechar={() => definirBusca(false)} />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {painel === 'perfil' && <TelaPerfil key="perfil" token={token} perto={posicao ?? gps.posicao} aoFechar={() => definirPainel(null)} />}
+        {painel === 'historico' && <TelaHistorico key="historico" token={token} tipo="motorista" aoFechar={() => definirPainel(null)} />}
       </AnimatePresence>
 
       <Confete origem={confete} />
@@ -466,7 +484,10 @@ function CorridaMotorista({ corrida, estado, enderecos, trajeto, conectado, simu
   )
 }
 
-function Encerrada({ estado, corrida, voltar }: { estado: EstadoCorrida | null; corrida: Corrida | null; voltar: () => void }) {
+function Encerrada({ estado, corrida, voltar, avaliar }: {
+  estado: EstadoCorrida | null; corrida: Corrida | null; voltar: () => void
+  avaliar: (nota: number, comentario: string) => Promise<void>
+}) {
   const paga = estado === 'paga'
   return (
     <div className="conteudo centralizado">
@@ -474,6 +495,9 @@ function Encerrada({ estado, corrida, voltar }: { estado: EstadoCorrida | null; 
       <TextoRevelado className="titulo-folha pequeno" texto={paga ? 'Corrida paga' : 'Corrida cancelada'} atraso={0.3} />
       {paga && corrida && <div className="valor-final"><Odometro texto={reais(corrida.custo_estimado)} /></div>}
       <p className="texto-apoio">{paga ? 'Você já está de volta à fila.' : 'O passageiro cancelou. Você voltou à fila.'}</p>
+      {paga && corrida?.passageiro_nome && (
+        <AvaliarCorrida quem={corrida.passageiro_nome.split(' ')[0]} notaDada={corrida.minha_avaliacao} enviar={avaliar} />
+      )}
       <Botao onClick={voltar}>Voltar à fila</Botao>
     </div>
   )

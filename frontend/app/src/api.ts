@@ -6,7 +6,8 @@
  * aponta para o backend no Railway.
  */
 import type {
-  Caixa, Corrida, Estimativa, IdCategoria, InfoMalha, Lugar, Ponto, RespostaPosicao, ResumoMotorista, Rota,
+  Caixa, Corrida, EdicaoPerfil, Estimativa, FormaPagamento, IdCategoria, InfoMalha, ItemHistorico, Lugar,
+  LocalSalvo, Perfil, Ponto, RespostaPosicao, ResumoMotorista, Rota, TipoLocal,
   Semaforo, Sessao, TipoUsuario, Trecho,
 } from './tipos'
 
@@ -24,7 +25,7 @@ let aoExpirar: (() => void) | null = null
 export function definirAoExpirar(funcao: () => void) { aoExpirar = funcao }
 
 interface Opcoes {
-  metodo?: 'GET' | 'POST'
+  metodo?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   corpo?: unknown
   token?: string
   sinal?: AbortSignal
@@ -77,6 +78,10 @@ export interface DadosRegistro {
   modelo?: string
 }
 
+/** "Título, detalhe" do endereço, como o passageiro o viu — vai para o histórico. */
+const textoDoLugar = (l: Lugar) =>
+  (l.gps && l.detalhe ? l.detalhe : [l.titulo, l.detalhe].filter(Boolean).join(', ')).slice(0, 200)
+
 const corpoViagem = (origem: Ponto, destino: Ponto) => ({
   origem_lat: origem.lat, origem_lon: origem.lon,
   destino_lat: destino.lat, destino_lon: destino.lon,
@@ -127,8 +132,31 @@ export const api = {
       '/motoristas/disponibilidade', { metodo: 'POST', corpo: { disponivel }, token }),
 
   // ---- corrida
-  pedirCorrida: (token: string, origem: Ponto, destino: Ponto, categoria: IdCategoria = 'economico') =>
-    pedir<Corrida>('/corridas', { metodo: 'POST', token, corpo: { ...corpoViagem(origem, destino), categoria } }),
+  pedirCorrida: (token: string, origem: Lugar, destino: Lugar,
+                 { categoria = 'economico', formaPagamento = 'pix' }: { categoria?: IdCategoria; formaPagamento?: FormaPagamento } = {}) =>
+    pedir<Corrida>('/corridas', {
+      metodo: 'POST', token,
+      corpo: {
+        ...corpoViagem(origem, destino), categoria, forma_pagamento: formaPagamento,
+        origem_texto: textoDoLugar(origem), destino_texto: textoDoLugar(destino),
+      },
+    }),
+  historico: (token: string, antesDe?: number) =>
+    pedir<ItemHistorico[]>(`/corridas?limite=20${antesDe ? `&antes_de=${antesDe}` : ''}`, { token }),
+  avaliar: (token: string, id: number, nota: number, comentario?: string) =>
+    pedir<Corrida>(`/corridas/${id}/avaliacao`, { metodo: 'POST', token, corpo: { nota, comentario } }),
+
+  // ---- perfil e locais salvos
+  perfil: (token: string) => pedir<Perfil>('/usuarios/eu', { token }),
+  editarPerfil: (token: string, dados: EdicaoPerfil) =>
+    pedir<Perfil>('/usuarios/eu', { metodo: 'PATCH', token, corpo: dados }),
+  locais: (token: string) => pedir<LocalSalvo[]>('/usuarios/eu/locais', { token }),
+  salvarLocal: (token: string, tipo: TipoLocal, lugar: Lugar, rotulo?: string) =>
+    pedir<LocalSalvo>('/usuarios/eu/locais', {
+      metodo: 'POST', token,
+      corpo: { tipo, rotulo, titulo: lugar.titulo.slice(0, 160), detalhe: (lugar.detalhe ?? '').slice(0, 200), lat: lugar.lat, lon: lugar.lon },
+    }),
+  apagarLocal: (token: string, id: number) => pedir<null>(`/usuarios/eu/locais/${id}`, { metodo: 'DELETE', token }),
   consultarCorrida: (token: string, id: number) => pedir<Corrida>(`/corridas/${id}`, { token }),
   rotaDaCorrida: (token: string, id: number) => pedir<Rota>(`/corridas/${id}/rota`, { token }),
   rotaDoMotorista: (token: string, id: number) => pedir<Rota>(`/corridas/${id}/rota-motorista`, { token }),

@@ -126,11 +126,11 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 | `seguranca.py` | bcrypt e JWT |
 | `config.py` | configuração via ambiente (caminhos relativos partem de `backend/`) |
 
-## Testes — 218, sem pytest
+## Testes — 237, sem pytest
 
 ```bash
 for t in algoritmos quadtree matriz alt contracao; do python3 matematica/tests/test_$t.py; done
-for t in osm estados api ws;        do python3 backend/tests/test_$t.py; done
+for t in osm estados migracoes api ws; do python3 backend/tests/test_$t.py; done
 ```
 
 | Arquivo | Qtd | Cobre |
@@ -142,7 +142,8 @@ for t in osm estados api ws;        do python3 backend/tests/test_$t.py; done
 | `matematica/tests/test_contracao.py` | 14 | contração: oráculo Dijkstra, mão única, semáforo, corte de 250 m, traçado |
 | `backend/tests/test_osm.py` | 29 | parser OSM, mão única, semáforos, poda, blocos, extrato .pbf, artefato .gz (sem rede) |
 | `backend/tests/test_estados.py` | 18 | Kahn, DAG, transições proibidas |
-| `backend/tests/test_api.py` | 49 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista, CORS |
+| `backend/tests/test_api.py` | 63 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista, CORS, perfil, locais salvos, pagamento, histórico, avaliações |
+| `backend/tests/test_migracoes.py` | 5 | migração aditiva contra o esquema antigo, idempotência, recusa de NOT NULL |
 | `backend/tests/test_ws.py` | 14 | tempo real, isolamento entre corridas |
 
 `frontend/web/e2e/fluxo.py` (Playwright) ainda usa a interface do front antigo.

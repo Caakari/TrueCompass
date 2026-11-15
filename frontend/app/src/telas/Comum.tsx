@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { milhar, pontoCardinal, vibrar } from '../lib/util'
 import type { Corrida, EstadoCorrida, Estimativa } from '../tipos'
 import { Bussola } from '../ui/Bussola'
+import { NotaMedia } from '../ui/Estrelas'
 import { Icone } from '../ui/Icone'
 import { BotaoRedondo, NumeroDeslizante } from '../ui/Movimento'
 
@@ -275,10 +276,10 @@ export function CartaoMotorista({ corrida, categoria }: { corrida: Corrida; cate
       <span className="avatar grande">{iniciais}<i className="avatar-anel" /></span>
       <div className="cartao-motorista-textos">
         <b>{corrida.motorista_nome || 'Seu motorista'}</b>
-        {/* Contagem real de corridas concluídas: o protótipo não coleta notas. */}
+        {/* Nota média (ou "Novo") e corridas concluídas: os dois vêm do banco. */}
         {corridas != null && (
           <span className="cartao-corridas">
-            <Icone nome="check" tamanho={12} traco={2.6} />
+            <NotaMedia nota={corrida.motorista_nota} total={corrida.motorista_avaliacoes} />
             {corridas === 0 ? 'Primeira corrida' : `${milhar(corridas)} ${corridas === 1 ? 'corrida' : 'corridas'}`}
           </span>
         )}
@@ -291,7 +292,7 @@ export function CartaoMotorista({ corrida, categoria }: { corrida: Corrida; cate
             <small>BRASIL</small>{corrida.motorista_placa}
           </motion.span>
         )}
-        <small>{corrida.motorista_modelo || 'Carro'}</small>
+        <small>{[corrida.motorista_modelo || 'Carro', corrida.motorista_cor_carro].filter(Boolean).join(' · ')}</small>
       </div>
     </motion.div>
   )

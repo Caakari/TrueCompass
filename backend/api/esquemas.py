@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Contratos de entrada e saida da API (Pydantic)."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
@@ -44,6 +45,11 @@ class CorridaEntrada(BaseModel):
     # Ver dominio.servicos.corrida.CATEGORIAS. Opcional: cliente antigo segue
     # pedindo o Economico.
     categoria: Literal["economico", "conforto", "grande"] = "economico"
+    # Simulado: nenhum pagamento real e processado. Fica registrado na corrida.
+    forma_pagamento: Literal["pix", "cartao", "dinheiro"] = "pix"
+    # Enderecos como o passageiro os viu, para o historico.
+    origem_texto: str | None = Field(default=None, max_length=200)
+    destino_texto: str | None = Field(default=None, max_length=200)
 
 
 class CorridaSaida(BaseModel):
@@ -58,10 +64,20 @@ class CorridaSaida(BaseModel):
     motorista_nome: str | None = None
     motorista_placa: str | None = None
     motorista_modelo: str | None = None
-    # Corridas que o motorista ja concluiu: dado real, no lugar de uma "nota"
-    # que o prototipo nao coleta.
+    # Corridas que o motorista ja concluiu, e a media das notas que recebeu
+    # (None enquanto ninguem o avaliou: "novo", e nao "nota zero").
     motorista_corridas: int | None = None
+    motorista_cor_carro: str | None = None
+    motorista_nota: float | None = None
+    motorista_avaliacoes: int = 0
     passageiro_nome: str | None = None
+    passageiro_nota: float | None = None
+    categoria: str | None = None
+    forma_pagamento: str | None = None
+    origem_texto: str | None = None
+    destino_texto: str | None = None
+    # A nota que QUEM PERGUNTA deu nesta corrida (None = ainda nao avaliou).
+    minha_avaliacao: int | None = None
     origem: tuple[float, float] | None = None       # cruzamento de embarque
     destino: tuple[float, float] | None = None
 
@@ -70,3 +86,75 @@ class RotaSaida(BaseModel):
     segundos: float
     metros: float
     pontos: list[tuple[float, float]]      # [lat, lon] para o Leaflet desenhar
+
+
+# ------------------------------------------------------------------ perfil
+
+class PerfilSaida(BaseModel):
+    id: int
+    nome: str
+    email: str
+    tipo: str
+    telefone: str | None = None
+    cor_avatar: str | None = None
+    criado_em: datetime | None = None
+    # So de motorista.
+    placa: str | None = None
+    modelo: str | None = None
+    cor_carro: str | None = None
+    # Reputacao: media das notas recebidas e corridas levadas ate o fim.
+    nota: float | None = None
+    avaliacoes: int = 0
+    corridas: int = 0
+
+
+class PerfilEntrada(BaseModel):
+    """Tudo opcional: so muda o que vier. String vazia apaga o campo opcional."""
+    nome: str | None = Field(default=None, min_length=2, max_length=120)
+    telefone: str | None = Field(default=None, pattern=r"^$|^\+?[0-9 ()-]{8,20}$")
+    cor_avatar: str | None = Field(default=None, pattern=r"^$|^#[0-9A-Fa-f]{6}$")
+    placa: str | None = Field(default=None, min_length=7, max_length=10)
+    modelo: str | None = Field(default=None, max_length=60)
+    cor_carro: str | None = Field(default=None, max_length=30)
+
+
+# ---------------------------------------------------------- locais salvos
+
+class LocalEntrada(BaseModel):
+    tipo: Literal["casa", "trabalho", "outro"]
+    rotulo: str | None = Field(default=None, max_length=40)   # nome do favorito
+    titulo: str = Field(min_length=1, max_length=160)
+    detalhe: str = Field(default="", max_length=200)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class LocalSaida(BaseModel):
+    id: int
+    tipo: str
+    rotulo: str
+    titulo: str
+    detalhe: str
+    lat: float
+    lon: float
+
+
+# ------------------------------------------------------ historico e notas
+
+class HistoricoItem(BaseModel):
+    id: int
+    estado: str
+    criada_em: datetime | None = None
+    categoria: str | None = None
+    forma_pagamento: str | None = None
+    custo_estimado: float | None = None
+    origem_texto: str | None = None
+    destino_texto: str | None = None
+    # O outro lado: o motorista para o passageiro, e vice-versa.
+    outro_nome: str | None = None
+    minha_avaliacao: int | None = None
+
+
+class AvaliacaoEntrada(BaseModel):
+    nota: int = Field(ge=1, le=5)
+    comentario: str | None = Field(default=None, max_length=280)

@@ -19,8 +19,15 @@ Sessao = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def criar_tabelas():
-    """Suficiente para o escopo academico. Em evolucao real, use Alembic."""
+    """Tabelas novas (create_all) e colunas novas em tabelas existentes.
+
+    A segunda parte e a migracao aditiva de `infra.migracoes`: sem ela, cada
+    coluna nova no modelo quebraria o MySQL de producao, que ja tem as tabelas.
+    Para remover ou alterar coluna, use Alembic.
+    """
+    from infra.migracoes import migrar
     Base.metadata.create_all(engine)
+    return migrar(engine, Base.metadata)
 
 
 def obter_sessao():

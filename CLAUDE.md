@@ -102,12 +102,14 @@ Camada de infraestrutura em `backend/infra/` (rede e disco; `algoritmos/` NUNCA 
   da importação: `backend/requirements-importacao.txt`
 - `preparar_alt.py` — CLI: gera `backend/dados/alt.bin` com os marcos do ALT
 - `geocodificacao.py` — busca de lugares: Photon ao digitar, Nominatim só no Enter
+- `migracoes.py` — migração ADITIVA no boot: acrescenta colunas que faltam
 - `backend/tests/test_osm.py` — 29 testes, rodam sem rede (fixture embutido)
 
 Camada de domínio em `backend/dominio/` (regras, sem HTTP e sem SQL bruto):
 
 - `estados.py` — DAG do ciclo da corrida; Kahn valida no boot
 - `registro.py` — posições dos motoristas em memória (não no banco)
+- `servicos/avaliacao.py` — notas de 1 a 5 entre passageiro e motorista
 - `servicos/corrida.py` — orquestra índice espacial → busca reversa → A*
 
 Camada HTTP em `backend/api/` (FastAPI):
@@ -115,7 +117,8 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `main.py` — app e `lifespan` (valida DAG, carrega malha, constrói reverso)
 - `rotas/` — auth, motoristas, corridas, malha, lugares, viagens, ws · `conexoes.py` — WebSocket
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (49), `test_ws.py` (14)
+- `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (63), `test_ws.py` (14), `test_migracoes.py` (5)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -193,7 +196,31 @@ Decisões que valem manter:
   resultados, e num raio fixo ela cresce com a densidade. A §6 da documentação
   técnica diz O(log n) e está **retificada** na Seção C (Proposição C.14).
 
+Banco e migração:
+
+- `create_all` cria tabelas novas, mas **não** acrescenta coluna a tabela que já
+  existe. `infra/migracoes.py` roda no boot (em `criar_tabelas`) e faz
+  `ALTER TABLE ... ADD COLUMN` só do que falta, com os índices. Nunca remove nem
+  altera coluna: isso é Alembic. Idempotente; testado contra o esquema antigo.
+- **Toda coluna nova em tabela existente tem de ser `nullable`** (ou ter
+  `server_default`): as linhas antigas não têm valor. A migração recusa antes de
+  alterar qualquer coisa, e o servidor não sobe.
+- Média de notas é calculada com `AVG` na consulta, nunca guardada: guardar
+  exigiria sincronizar a cada avaliação nova. Sem avaliação, a nota é `None`
+  ("Novo"), não zero. Uma avaliação por autor por corrida (restrição no banco).
+- Histórico pagina por **cursor** (`antes_de` = menor id recebido), não por
+  offset: corrida nova no meio da rolagem não desloca nem repete itens.
+- Pagamento (Pix, cartão, dinheiro) é **simulado**: fica gravado na corrida,
+  nenhuma cobrança real acontece.
+
 Decisões do front-end:
+
+- **`layoutId` dentro da folha prende a troca de fase.** A `Folha` usa
+  `AnimatePresence mode="wait"`; um elemento de layout compartilhado
+  (`layoutId`) no conteúdo que sai faz a saída nunca terminar, e a fase seguinte
+  não entra (a folha fica vazia). Foi o destaque do seletor de pagamento:
+  destaque em CSS. O `layoutId="caixa-busca"` é a exceção que funciona, porque
+  tem par na tela de busca.
 
 - O fluxo segue o dos apps de corrida (estilo Uber), com a identidade do
   TrueCompass: tela inicial é UMA pergunta ("Para onde?") + recentes; a prévia
@@ -203,9 +230,9 @@ Decisões do front-end:
 - O multiplicador da categoria incide sobre a tarifa inteira; a rota é a mesma.
   No protótipo todo motorista atende as três categorias — por isso o tempo de
   chegada é igual nos três cartões, e a tela diz isso.
-- A categoria **não** vira coluna no banco: entra no cálculo de
-  `custo_estimado` no pedido (`CorridaEntrada.categoria`), que já é persistido.
-  Sem migração no MySQL de produção.
+- A categoria entra no cálculo de `custo_estimado` no pedido e é gravada em
+  `corridas.categoria` (junto com `forma_pagamento` e os endereços em texto),
+  para o histórico. As colunas entram pela migração aditiva.
 - Mapa limpo: tiles em **tons de cinza**, sem semáforos e sem malha por padrão
   (opção "Malha e semáforos" no menu). A única coisa colorida é a rota. Se os
   tiles falharem, a malha volta como fundo, mas sem os semáforos.

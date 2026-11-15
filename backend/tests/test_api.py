@@ -623,6 +623,169 @@ def test_separar_origens():
     assert separar_origens("https://a.app") == (["https://a.app"], None)
 
 
+# ------------------------------------------------------------------ perfil
+
+def _corrida_concluida(passageiro, motorista_token=None, **extra):
+    """Pede e leva uma corrida ate `concluida`. Devolve o json da corrida."""
+    if motorista_token is None:
+        novo_motorista()
+    corrida = pedir_corrida(passageiro, **extra).json()
+    for acao in ("iniciar", "finalizar"):
+        cliente.post(f"/corridas/{corrida['id']}/{acao}", headers=cabecalho(passageiro))
+    return corrida
+
+
+def test_perfil_comeca_sem_nota_e_aceita_edicao_parcial():
+    token = novo_passageiro()
+    perfil = cliente.get("/usuarios/eu", headers=cabecalho(token)).json()
+    assert perfil["nota"] is None and perfil["avaliacoes"] == 0 and perfil["corridas"] == 0
+    r = cliente.patch("/usuarios/eu", json={"telefone": "(11) 98765-4321", "cor_avatar": "#2F8A4C"},
+                      headers=cabecalho(token))
+    assert r.status_code == 200, r.text
+    assert r.json()["telefone"] == "(11) 98765-4321" and r.json()["nome"] == perfil["nome"]
+    apagado = cliente.patch("/usuarios/eu", json={"telefone": ""}, headers=cabecalho(token)).json()
+    assert apagado["telefone"] is None and apagado["cor_avatar"] == "#2F8A4C"
+
+
+def test_perfil_recusa_cor_e_telefone_malformados():
+    token = novo_passageiro()
+    for corpo in ({"cor_avatar": "verde"}, {"cor_avatar": "xx#123456"}, {"telefone": "abc"}):
+        assert cliente.patch("/usuarios/eu", json=corpo, headers=cabecalho(token)).status_code == 422
+
+
+def test_dados_do_carro_sao_so_de_motorista():
+    passageiro = novo_passageiro()
+    assert cliente.patch("/usuarios/eu", json={"cor_carro": "Prata"},
+                         headers=cabecalho(passageiro)).status_code == 422
+    motorista = novo_motorista(disponivel=False)
+    r = cliente.patch("/usuarios/eu", json={"cor_carro": "Prata", "placa": "abc1d23"},
+                      headers=cabecalho(motorista)).json()
+    assert r["cor_carro"] == "Prata" and r["placa"] == "ABC1D23"
+
+
+# ----------------------------------------------------------- locais salvos
+
+def _local(token, **campos):
+    corpo = {"tipo": "outro", "titulo": "Lugar", "lat": ORIGEM[0], "lon": ORIGEM[1], **campos}
+    return cliente.post("/usuarios/eu/locais", json=corpo, headers=cabecalho(token))
+
+
+def test_casa_e_unica_e_e_substituida():
+    token = novo_passageiro()
+    primeira = _local(token, tipo="casa", titulo="Rua A, 1").json()
+    segunda = _local(token, tipo="casa", titulo="Rua B, 2").json()
+    assert primeira["id"] == segunda["id"] and segunda["rotulo"] == "Casa"
+    locais = cliente.get("/usuarios/eu/locais", headers=cabecalho(token)).json()
+    assert [l["titulo"] for l in locais] == ["Rua B, 2"]
+
+
+def test_lista_poe_casa_e_trabalho_antes_dos_favoritos():
+    token = novo_passageiro()
+    _local(token, titulo="Academia", rotulo="Academia")
+    _local(token, tipo="trabalho", titulo="USJT")
+    _local(token, tipo="casa", titulo="Casa")
+    assert [l["tipo"] for l in cliente.get("/usuarios/eu/locais", headers=cabecalho(token)).json()] \
+        == ["casa", "trabalho", "outro"]
+
+
+def test_nao_se_apaga_local_alheio():
+    dono, intruso = novo_passageiro(), novo_passageiro()
+    local = _local(dono, titulo="Meu").json()
+    assert cliente.delete(f"/usuarios/eu/locais/{local['id']}",
+                          headers=cabecalho(intruso)).status_code == 404
+    assert cliente.delete(f"/usuarios/eu/locais/{local['id']}",
+                          headers=cabecalho(dono)).status_code == 204
+    assert cliente.get("/usuarios/eu/locais", headers=cabecalho(dono)).json() == []
+
+
+# ------------------------------------------------------ pagamento e historico
+
+def test_forma_de_pagamento_e_enderecos_ficam_na_corrida():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro, forma_pagamento="dinheiro", categoria="grande",
+                            origem_texto="Av. Paulista, 1000", destino_texto="Praça da Sé").json()
+    assert corrida["forma_pagamento"] == "dinheiro" and corrida["categoria"] == "grande"
+    assert corrida["origem_texto"] == "Av. Paulista, 1000"
+
+
+def test_forma_de_pagamento_desconhecida_e_recusada():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    assert pedir_corrida(passageiro, forma_pagamento="cheque").status_code == 422
+
+
+def test_historico_traz_so_as_minhas_da_mais_nova_para_a_mais_velha():
+    passageiro, outro = novo_passageiro(), novo_passageiro()
+    novo_motorista()
+    primeira = _corrida_concluida(passageiro, destino_texto="Primeira")
+    cliente.post(f"/corridas/{primeira['id']}/pagamento", headers=cabecalho(passageiro))
+    _corrida_concluida(outro)
+    segunda = _corrida_concluida(passageiro, destino_texto="Segunda")
+    itens = cliente.get("/corridas", headers=cabecalho(passageiro)).json()
+    assert [i["id"] for i in itens] == [segunda["id"], primeira["id"]]
+    assert itens[0]["destino_texto"] == "Segunda" and itens[0]["outro_nome"].startswith("Motorista")
+    pagina = cliente.get(f"/corridas?antes_de={segunda['id']}", headers=cabecalho(passageiro)).json()
+    assert [i["id"] for i in pagina] == [primeira["id"]], "cursor: so as anteriores"
+
+
+def test_historico_do_motorista_mostra_o_passageiro():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = _corrida_concluida(passageiro, motorista_token=motorista)
+    itens = cliente.get("/corridas", headers=cabecalho(motorista)).json()
+    assert itens[0]["id"] == corrida["id"] and itens[0]["outro_nome"].startswith("Passageiro")
+
+
+# ------------------------------------------------------------- avaliacoes
+
+def test_nao_se_avalia_corrida_que_nao_terminou():
+    passageiro = novo_passageiro()
+    novo_motorista()
+    corrida = pedir_corrida(passageiro).json()
+    r = cliente.post(f"/corridas/{corrida['id']}/avaliacao", json={"nota": 5},
+                     headers=cabecalho(passageiro))
+    assert r.status_code == 409
+
+
+def test_avaliacao_entra_na_media_do_motorista_e_nao_se_repete():
+    motorista = novo_motorista()
+    notas = []
+    for nota in (5, 4):
+        passageiro = novo_passageiro()
+        corrida = _corrida_concluida(passageiro, motorista_token=motorista)
+        r = cliente.post(f"/corridas/{corrida['id']}/avaliacao", json={"nota": nota, "comentario": "ok"},
+                         headers=cabecalho(passageiro))
+        assert r.status_code == 200, r.text
+        assert r.json()["minha_avaliacao"] == nota
+        notas.append((passageiro, corrida))
+        cliente.post(f"/motoristas/disponibilidade", json={"disponivel": True}, headers=cabecalho(motorista))
+    passageiro, corrida = notas[-1]
+    repetida = cliente.post(f"/corridas/{corrida['id']}/avaliacao", json={"nota": 1},
+                            headers=cabecalho(passageiro))
+    assert repetida.status_code == 409
+    cartao = cliente.get(f"/corridas/{corrida['id']}", headers=cabecalho(passageiro)).json()
+    assert cartao["motorista_nota"] == 4.5 and cartao["motorista_avaliacoes"] == 2
+
+
+def test_motorista_avalia_o_passageiro():
+    passageiro = novo_passageiro()
+    motorista = novo_motorista()
+    corrida = _corrida_concluida(passageiro, motorista_token=motorista)
+    r = cliente.post(f"/corridas/{corrida['id']}/avaliacao", json={"nota": 3},
+                     headers=cabecalho(motorista))
+    assert r.status_code == 200 and r.json()["passageiro_nota"] == 3.0
+    assert cliente.get("/usuarios/eu", headers=cabecalho(passageiro)).json()["nota"] == 3.0
+
+
+def test_nota_fora_de_1_a_5_e_recusada():
+    passageiro = novo_passageiro()
+    corrida = _corrida_concluida(passageiro)
+    for nota in (0, 6):
+        assert cliente.post(f"/corridas/{corrida['id']}/avaliacao", json={"nota": nota},
+                            headers=cabecalho(passageiro)).status_code == 422
+
+
 def main():
     global cliente
     testes = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

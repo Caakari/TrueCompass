@@ -8,19 +8,24 @@ import {
 } from '../lib/util'
 import { Mapa, type ApiMapa, type Onda } from '../mapa/Mapa'
 import type {
-  Corrida, EstadoCorrida, Estimativa, IdCategoria, LatLon, Lugar, Malha, OpcaoViagem, Ponto, Rota, Semaforo, Sessao, Tema,
+  Corrida, EstadoCorrida, Estimativa, FormaPagamento, IdCategoria, LatLon, LocalSalvo, Lugar, Malha, OpcaoViagem, Ponto,
+  Rota, Semaforo, Sessao, Tema, TipoLocal,
 } from '../tipos'
 import { Bussola } from '../ui/Bussola'
 import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Esqueleto, Odometro, Reticencias, TextoRevelado } from '../ui/Movimento'
+import { AvaliarCorrida } from '../ui/Estrelas'
 import { Busca, guardarRecente, lerRecentes, type Campo } from './Busca'
+import { NOME_CATEGORIA, PAGAMENTOS, TelaHistorico } from './Historico'
+import { ICONE_LOCAL, TelaPerfil } from './Perfil'
 import {
   BarraTopo, CabecaMenu, CartaoMotorista, ControlesMapa, DetalhesAlgoritmo, ItemMenu,
   LinhaDeEstados, PinoCentral, SeloAoVivo, SeloFinal,
 } from './Comum'
 
 const CHAVE_CORRIDA = 'truecompass.corrida'
+const CHAVE_PAGAMENTO = 'truecompass.pagamento'
 const FINAIS: EstadoCorrida[] = ['paga', 'cancelada']
 const VAZIO: LatLon[] = []
 const SEM_SEMAFOROS: Semaforo[] = []
@@ -66,6 +71,21 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [mostrarMalha, definirMostrarMalha] = useState(false)
   const [semTiles, definirSemTiles] = useState(false)
   const [categoria, definirCategoria] = useState<IdCategoria>(salvo?.categoria ?? 'economico')
+  // Preferência do aparelho: quem paga com Pix costuma pagar sempre com Pix.
+  const [formaPagamento, definirFormaPagamento] = useState<FormaPagamento>(
+    () => lerArmazenado<FormaPagamento>(CHAVE_PAGAMENTO) ?? 'pix')
+  const [painel, definirPainel] = useState<'perfil' | 'historico' | null>(null)
+  const [locais, definirLocais] = useState<LocalSalvo[]>([])
+  const [definindoLocal, definirDefinindoLocal] = useState<TipoLocal | null>(null)
+
+  useEffect(() => { api.locais(token).then(definirLocais).catch(() => {}) }, [token])
+  useEffect(() => { gravarArmazenado(CHAVE_PAGAMENTO, formaPagamento) }, [formaPagamento])
+
+  function irParaLocal(local: LocalSalvo) {
+    vibrar(8)
+    aplicar('destino', { id: `local:${local.id}`, titulo: local.titulo, detalhe: local.detalhe || local.rotulo,
+                         categoria: 'endereco', lat: local.lat, lon: local.lon })
+  }
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const recentes = useMemo(lerRecentes, [busca, corrida?.id])
 
@@ -186,7 +206,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
     vibrar([12, 40, 12])
     const inicio = performance.now()
     try {
-      const nova = await api.pedirCorrida(token, origem, destino, categoria)
+      const nova = await api.pedirCorrida(token, origem, destino, { categoria, formaPagamento })
       // O pareamento é rápido; o radar fica um instante para ser percebido.
       const resta = 1900 - (performance.now() - inicio)
       if (resta > 0) await esperar(resta)
@@ -332,6 +352,8 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
                  menu={(fechar) => (
                    <>
                      <CabecaMenu icone="usuario" titulo="Passageiro" detalhe={`${malha.nos.toLocaleString('pt-BR')} cruzamentos reais`} />
+                     <ItemMenu icone="usuario" onClick={() => { fechar(); definirPainel('perfil') }}>Perfil e locais salvos</ItemMenu>
+                     <ItemMenu icone="relogio" onClick={() => { fechar(); definirPainel('historico') }}>Suas viagens</ItemMenu>
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
                      <ItemMenu icone="camadas" valor={mostrarMalha} onClick={() => definirMostrarMalha(!mostrarMalha)}>Malha e semáforos</ItemMenu>
                      <ItemMenu icone="sair" perigo onClick={() => { fechar(); sair() }}>Sair</ItemMenu>
@@ -350,12 +372,14 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
       <Folha chave={fase === 'corrida' ? `corrida-${estado}` : fase} aoMedir={definirMargens} recolher={recolherFolha}
              fracaoMaxima={fase === 'previa' ? 0.68 : undefined}>
         {fase === 'inicio' && (
-          <Inicio origem={origem} gps={gps} gpsNaArea={gpsNaArea} recentes={recentes}
-                  abrirBusca={definirBusca} aoEscolherRecente={(l) => aplicar('destino', l)} />
+          <Inicio origem={origem} gps={gps} gpsNaArea={gpsNaArea} recentes={recentes} locais={locais}
+                  abrirBusca={definirBusca} aoEscolherRecente={(l) => aplicar('destino', l)}
+                  irParaLocal={irParaLocal} definirLocal={definirDefinindoLocal} />
         )}
         {fase === 'previa' && origem && destino && (
           <Previa origem={origem} destino={destino} estimativa={calculando ? null : estimativa} erro={erro}
                   categoria={categoria} escolherCategoria={(c) => { vibrar(8); definirCategoria(c) }}
+                  formaPagamento={formaPagamento} escolherPagamento={(f) => { vibrar(6); definirFormaPagamento(f) }}
                   trocar={trocar} abrirBusca={definirBusca} voltar={() => { definirDestino(null); definirErro(null) }}
                   confirmar={confirmar} comparar={compararBuscas} />
         )}
@@ -365,7 +389,10 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
           <EmCorrida corrida={corrida} estado={estado} destino={destino} rotaMotorista={rotaMotorista} categoria={categoria}
                      conectado={aoVivo.conectado} ocupado={ocupado} erro={erro} agir={agir} />
         )}
-        {fase === 'fim' && corrida && <Fim estado={estado} corrida={corrida} destino={destino} novaCorrida={novaCorrida} />}
+        {fase === 'fim' && corrida && (
+          <Fim estado={estado} corrida={corrida} destino={destino} novaCorrida={novaCorrida}
+               avaliar={async (nota, comentario) => { definirCorrida(await api.avaliar(token, corrida.id, nota, comentario)); vibrar([10, 40, 10]) }} />
+        )}
         {fase === 'escolha' && escolha && (
           <EscolhaNoMapa escolha={escolha} confirmar={confirmarEscolha} cancelar={() => definirEscolha(null)} />
         )}
@@ -386,6 +413,21 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
                  aoEscolherNoMapa={iniciarEscolha}
                  aoFechar={() => definirBusca(null)} />
         )}
+        {definindoLocal && (
+          <Busca key="definir-local" token={token} campoInicial="posicao" campos={['posicao']} valores={{}} perto={gps.posicao}
+                 titulo={definindoLocal === 'casa' ? 'Endereço de casa' : 'Endereço do trabalho'} rotulo="Busque o endereço"
+                 aoEscolher={(_c, lugar) => {
+                   api.salvarLocal(token, definindoLocal, lugar)
+                     .then(() => api.locais(token)).then(definirLocais).catch((f: Error) => definirErro(f.message))
+                   definirDefinindoLocal(null)
+                 }}
+                 aoFechar={() => definirDefinindoLocal(null)} />
+        )}
+        {painel === 'perfil' && (
+          <TelaPerfil key="perfil" token={token} perto={gps.posicao} aoFechar={() => definirPainel(null)}
+                      aoMudar={(_p, lista) => definirLocais(lista)} />
+        )}
+        {painel === 'historico' && <TelaHistorico key="historico" token={token} tipo="passageiro" aoFechar={() => definirPainel(null)} />}
       </AnimatePresence>
 
       <Confete origem={confete} />
@@ -395,10 +437,14 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
 
 // ================================================================== fases
 
-function Inicio({ origem, gps, gpsNaArea, recentes, abrirBusca, aoEscolherRecente }: {
+function Inicio({ origem, gps, gpsNaArea, recentes, locais, abrirBusca, aoEscolherRecente, irParaLocal, definirLocal }: {
   origem: Lugar | null; gps: ReturnType<typeof useLocalizacao>; gpsNaArea: boolean; recentes: Lugar[]
-  abrirBusca: (c: Campo) => void; aoEscolherRecente: (l: Lugar) => void
+  locais: LocalSalvo[]; abrirBusca: (c: Campo) => void; aoEscolherRecente: (l: Lugar) => void
+  irParaLocal: (l: LocalSalvo) => void; definirLocal: (t: TipoLocal) => void
 }) {
+  const casa = locais.find((l) => l.tipo === 'casa')
+  const trabalho = locais.find((l) => l.tipo === 'trabalho')
+  const favoritos = locais.filter((l) => l.tipo === 'outro')
   const detalhe = origem?.detalhe ?? (
     gps.estado === 'aguardando' ? 'Procurando seu GPS…'
       : gps.estado === 'negado' ? 'Permissão de localização negada'
@@ -415,6 +461,22 @@ function Inicio({ origem, gps, gpsNaArea, recentes, abrirBusca, aoEscolherRecent
         <span>Para onde?</span>
         <span className="campo-busca-atalho"><Icone nome="relogio" tamanho={15} /> Agora</span>
       </motion.button>
+
+      {/* Atalhos: Casa e Trabalho sempre aparecem (definir ou ir), depois os favoritos. */}
+      <div className="atalhos-locais">
+        {([['casa', casa], ['trabalho', trabalho]] as const).map(([tipo, local]) => (
+          <motion.button key={tipo} className={`atalho-local ${local ? '' : 'vazio'}`} whileTap={{ scale: 0.94 }}
+                         onClick={() => local ? irParaLocal(local) : definirLocal(tipo)}>
+            <Icone nome={ICONE_LOCAL[tipo]} tamanho={16} />
+            <span>{local ? (tipo === 'casa' ? 'Casa' : 'Trabalho') : (tipo === 'casa' ? 'Definir casa' : 'Definir trabalho')}</span>
+          </motion.button>
+        ))}
+        {favoritos.map((local) => (
+          <motion.button key={local.id} className="atalho-local" whileTap={{ scale: 0.94 }} onClick={() => irParaLocal(local)}>
+            <Icone nome={ICONE_LOCAL.outro} tamanho={16} /><span>{local.rotulo}</span>
+          </motion.button>
+        ))}
+      </div>
 
       {recentes.length > 0 && (
         <motion.ul className="lista-rapida" initial="o" animate="v"
@@ -475,9 +537,11 @@ function ResumoTrajeto({ origem, destino, abrirBusca, trocar }:
   )
 }
 
-function Previa({ origem, destino, estimativa, erro, categoria, escolherCategoria, trocar, abrirBusca, voltar, confirmar, comparar }: {
+function Previa({ origem, destino, estimativa, erro, categoria, escolherCategoria, formaPagamento, escolherPagamento,
+                  trocar, abrirBusca, voltar, confirmar, comparar }: {
   origem: Lugar; destino: Lugar; estimativa: Estimativa | null; erro: string | null
-  categoria: IdCategoria; escolherCategoria: (c: IdCategoria) => void; trocar: () => void
+  categoria: IdCategoria; escolherCategoria: (c: IdCategoria) => void
+  formaPagamento: FormaPagamento; escolherPagamento: (f: FormaPagamento) => void; trocar: () => void
   abrirBusca: (c: Campo) => void; voltar: () => void; confirmar: () => void; comparar: () => void
 }) {
   const eta = estimativa?.motoristas?.eta_mais_proximo_s ?? null
@@ -535,6 +599,17 @@ function Previa({ origem, destino, estimativa, erro, categoria, escolherCategori
 
           {/* Fixo na base da folha: a ação nunca some abaixo da dobra. */}
           <div className="acao-fixa">
+            <div className="pagamentos" role="radiogroup" aria-label="Forma de pagamento">
+              {PAGAMENTOS.map((p) => (
+                <button key={p.id} role="radio" aria-checked={formaPagamento === p.id}
+                        className={`pagamento ${formaPagamento === p.id ? 'escolhido' : ''}`} onClick={() => escolherPagamento(p.id)}>
+                  {/* Destaque em CSS, e NÃO com layoutId: um elemento de layout
+                      compartilhado dentro da folha prende a saída do
+                      AnimatePresence mode="wait", e a fase seguinte nunca entra. */}
+                  <Icone nome={p.icone} tamanho={15} /> {p.nome}
+                </button>
+              ))}
+            </div>
             <Botao onClick={confirmar} className="botao-confirmar">
               Confirmar {escolhida.nome} · {reais(escolhida.custo)}
             </Botao>
@@ -565,7 +640,7 @@ function CartaoCategoria({ opcao, selecionada, segundos, eta, escolher }: {
           <span className="categoria-lugares"><Icone nome="usuario" tamanho={13} /> {opcao.lugares}</span>
         </span>
         <span className="categoria-chegada">
-          Chegada às {horarioDaqui(segundos + (eta ?? 0))}{eta != null && <> · a {Math.max(1, Math.round(eta / 60))} min</>}
+          Chegada {horarioDaqui(segundos + (eta ?? 0))}{eta != null && <> · a {Math.max(1, Math.round(eta / 60))} min</>}
         </span>
         <AnimatePresence initial={false}>
           {selecionada && (
@@ -613,8 +688,6 @@ function SemMotorista({ tentar, voltar }: { tentar: () => void; voltar: () => vo
   )
 }
 
-const NOME_CATEGORIA: Record<IdCategoria, string> = { economico: 'Econômico', conforto: 'Conforto', grande: 'Grande' }
-
 function EmCorrida({ corrida, estado, destino, rotaMotorista, categoria, conectado, ocupado, erro, agir }: {
   corrida: Corrida; estado: EstadoCorrida | null; destino: Lugar | null; rotaMotorista: Rota | null; categoria: IdCategoria
   conectado: boolean; ocupado: boolean; erro: string | null; agir: (a: AcaoCorrida) => void
@@ -652,8 +725,10 @@ function EmCorrida({ corrida, estado, destino, rotaMotorista, categoria, conecta
   )
 }
 
-function Fim({ estado, corrida, destino, novaCorrida }:
-  { estado: EstadoCorrida | null; corrida: Corrida; destino: Lugar | null; novaCorrida: () => void }) {
+function Fim({ estado, corrida, destino, novaCorrida, avaliar }: {
+  estado: EstadoCorrida | null; corrida: Corrida; destino: Lugar | null; novaCorrida: () => void
+  avaliar: (nota: number, comentario: string) => Promise<void>
+}) {
   const paga = estado === 'paga'
   return (
     <div className="conteudo centralizado">
@@ -663,6 +738,9 @@ function Fim({ estado, corrida, destino, novaCorrida }:
         <>
           <div className="valor-final"><Odometro texto={reais(corrida.custo_estimado)} /></div>
           <p className="texto-apoio">Obrigado por viajar com a TrueCompass{destino ? ` até ${destino.titulo}` : ''}.</p>
+          {corrida.motorista_nome && (
+            <AvaliarCorrida quem={corrida.motorista_nome.split(' ')[0]} notaDada={corrida.minha_avaliacao} enviar={avaliar} />
+          )}
         </>
       )}
       {!paga && <p className="texto-apoio">Nenhum valor foi cobrado.</p>}

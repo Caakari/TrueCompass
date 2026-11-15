@@ -106,14 +106,72 @@ export interface Corrida {
   motorista_nome: string | null
   motorista_placa: string | null
   motorista_modelo: string | null
-  /** Corridas que o motorista já concluiu (o protótipo não coleta notas). */
+  /** Corridas que o motorista já concluiu. */
   motorista_corridas: number | null
+  motorista_cor_carro: string | null
+  /** Média das notas recebidas; null enquanto ninguém avaliou ("novo"). */
+  motorista_nota: number | null
+  motorista_avaliacoes: number
+  passageiro_nota: number | null
+  categoria: IdCategoria | null
+  forma_pagamento: FormaPagamento | null
+  origem_texto: string | null
+  destino_texto: string | null
+  /** Nota que QUEM PERGUNTA deu nesta corrida; null = ainda não avaliou. */
+  minha_avaliacao: number | null
   passageiro_nome: string | null
   origem: LatLon | null
   destino: LatLon | null
 }
 
 export interface Rota { segundos: number; metros: number; pontos: LatLon[] }
+
+/** Simulado: nenhum pagamento real é processado. */
+export type FormaPagamento = 'pix' | 'cartao' | 'dinheiro'
+
+export interface Perfil {
+  id: number
+  nome: string
+  email: string
+  tipo: TipoUsuario
+  telefone: string | null
+  cor_avatar: string | null
+  criado_em: string | null
+  placa: string | null
+  modelo: string | null
+  cor_carro: string | null
+  nota: number | null
+  avaliacoes: number
+  corridas: number
+}
+
+export type EdicaoPerfil = Partial<Pick<Perfil, 'nome' | 'telefone' | 'cor_avatar' | 'placa' | 'modelo' | 'cor_carro'>>
+
+export type TipoLocal = 'casa' | 'trabalho' | 'outro'
+
+export interface LocalSalvo {
+  id: number
+  tipo: TipoLocal
+  rotulo: string
+  titulo: string
+  detalhe: string
+  lat: number
+  lon: number
+}
+
+export interface ItemHistorico {
+  id: number
+  estado: EstadoCorrida
+  criada_em: string | null
+  categoria: IdCategoria | null
+  forma_pagamento: FormaPagamento | null
+  custo_estimado: number | null
+  origem_texto: string | null
+  destino_texto: string | null
+  /** O motorista, para o passageiro; o passageiro, para o motorista. */
+  outro_nome: string | null
+  minha_avaliacao: number | null
+}
 
 /** /motoristas/resumo: só entra dinheiro depois do pagamento. */
 export interface ResumoMotorista { ganhos_hoje: number; corridas_hoje: number; corridas_total: number }

@@ -27,6 +27,10 @@ class Usuario(Base):
     senha_hash: Mapped[str] = mapped_column(String(128))
     tipo: Mapped[str] = mapped_column(String(20))          # passageiro | motorista
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    # Perfil. Toda coluna acrescentada depois da primeira versao e NULLABLE:
+    # a migracao aditiva (infra.migracoes) precisa disso nas linhas antigas.
+    telefone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cor_avatar: Mapped[str | None] = mapped_column(String(7), nullable=True)   # "#2F8A4C"
 
     motorista: Mapped["Motorista"] = relationship(back_populates="usuario",
                                                   uselist=False)
@@ -40,6 +44,7 @@ class Motorista(Base):
     placa: Mapped[str] = mapped_column(String(10))
     modelo: Mapped[str] = mapped_column(String(60), default="")
     disponivel: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    cor_carro: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # Id de no do OpenStreetMap: passa de 2^31, exige BigInteger.
     no_atual: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
@@ -63,6 +68,13 @@ class Corrida(Base):
     estado: Mapped[str] = mapped_column(String(20), default=ESTADO_INICIAL, index=True)
     eta_segundos: Mapped[float | None] = mapped_column(Float, nullable=True)
     custo_estimado: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Para o historico: o que o passageiro escolheu e os enderecos como ele os
+    # viu (o grafo so guarda o no; refazer a geocodificacao a cada listagem
+    # seria lento e abusaria do Photon/Nominatim).
+    categoria: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    forma_pagamento: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    origem_texto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    destino_texto: Mapped[str | None] = mapped_column(String(200), nullable=True)
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
     atualizada_em: Mapped[datetime] = mapped_column(DateTime, default=agora,
                                                     onupdate=agora)
@@ -94,3 +106,42 @@ class Pagamento(Base):
     valor: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default="processado")
     processado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class LocalSalvo(Base):
+    """Atalho de destino: Casa, Trabalho ou um favorito com nome livre.
+
+    Casa e Trabalho sao unicos por usuario (definir de novo substitui); os
+    favoritos ('outro') podem ser varios.
+    """
+
+    __tablename__ = "locais_salvos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(10))           # casa | trabalho | outro
+    rotulo: Mapped[str] = mapped_column(String(40))
+    titulo: Mapped[str] = mapped_column(String(160))
+    detalhe: Mapped[str] = mapped_column(String(200), default="")
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+
+
+class Avaliacao(Base):
+    """Nota de 1 a 5 que um lado da corrida da ao outro.
+
+    Uma por autor por corrida (restricao no banco, nao so no codigo: dois
+    toques rapidos em "Enviar" nao podem virar duas notas).
+    """
+
+    __tablename__ = "avaliacoes"
+    __table_args__ = (UniqueConstraint("corrida_id", "autor_id", name="uq_avaliacao_autor"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    corrida_id: Mapped[int] = mapped_column(ForeignKey("corridas.id"), index=True)
+    autor_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    avaliado_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    nota: Mapped[int] = mapped_column(Integer)
+    comentario: Mapped[str | None] = mapped_column(String(280), nullable=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
