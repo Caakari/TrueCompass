@@ -39,6 +39,20 @@ def obter_matriz(conexao: HTTPConnection):
     return getattr(conexao.app.state, "matriz", None)
 
 
+def obter_limites(conexao: HTTPConnection):
+    return conexao.app.state.limites
+
+
+def ip_de(conexao: HTTPConnection):
+    """IP de quem chama. Atras do proxy do Railway, o primeiro do
+    X-Forwarded-For; da para forjar, mas so afeta o limite por IP -- o limite
+    por e-mail continua valendo."""
+    encaminhado = conexao.headers.get("x-forwarded-for", "")
+    if encaminhado:
+        return encaminhado.split(",")[0].strip()
+    return conexao.client.host if conexao.client else "?"
+
+
 def obter_registro(conexao: HTTPConnection):
     return conexao.app.state.registro
 

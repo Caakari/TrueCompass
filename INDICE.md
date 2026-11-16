@@ -96,6 +96,8 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 |---|---|
 | `estados.py` | DAG do ciclo da corrida; Kahn valida no boot |
 | `registro.py` | posições dos motoristas em memória (não no banco) |
+| `limitador.py` | limite de tentativas (login, código, reenvio) em janela deslizante, relógio injetável |
+| `servicos/conta.py` | força da senha, código por e-mail (HMAC), sessão renovável com rotação e detecção de reuso |
 | `servicos/corrida.py` | orquestra quadtree → busca reversa → A\*; prévia da viagem |
 
 ### `backend/api/` — camada HTTP (FastAPI)
@@ -103,7 +105,7 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 | Arquivo | O que faz |
 |---|---|
 | `main.py` | app e `lifespan`: valida DAG, carrega malha, constrói reverso |
-| `rotas/auth.py` | registro e login (JWT) |
+| `rotas/auth.py` | cadastro com código por e-mail, login com bloqueio, recuperar senha, Google, renovar e sair |
 | `rotas/motoristas.py` | ping de GPS, disponibilidade |
 | `rotas/corridas.py` | ciclo da corrida |
 | `rotas/lugares.py` | busca de endereços reais (Photon/Nominatim) |
@@ -124,13 +126,15 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 | `geocodificacao.py` | busca de lugares, com cache e limite de taxa |
 | `modelos.py` · `banco.py` | tabelas SQLAlchemy e sessão |
 | `seguranca.py` | bcrypt e JWT |
+| `email.py` | envio do código de 6 dígitos: Resend, SMTP, log ou memória (testes) |
+| `google.py` | confere no Google o token do "Continuar com Google" (audiência = nosso client id) |
 | `config.py` | configuração via ambiente (caminhos relativos partem de `backend/`) |
 
-## Testes — 257, sem pytest
+## Testes — 281, sem pytest
 
 ```bash
 for t in algoritmos quadtree matriz alt contracao; do python3 matematica/tests/test_$t.py; done
-for t in osm estados migracoes api ws; do python3 backend/tests/test_$t.py; done
+for t in osm estados migracoes api ws auth; do python3 backend/tests/test_$t.py; done
 ```
 
 | Arquivo | Qtd | Cobre |
@@ -142,9 +146,10 @@ for t in osm estados migracoes api ws; do python3 backend/tests/test_$t.py; done
 | `matematica/tests/test_contracao.py` | 14 | contração: oráculo Dijkstra, mão única, semáforo, corte de 250 m, traçado |
 | `backend/tests/test_osm.py` | 29 | parser OSM, mão única, semáforos, poda, blocos, extrato .pbf, artefato .gz (sem rede) |
 | `backend/tests/test_estados.py` | 18 | Kahn, DAG, transições proibidas |
-| `backend/tests/test_api.py` | 80 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista, CORS, perfil, locais salvos, pagamento, histórico, avaliações, paradas, chat, link público, oferta e aceite |
-| `backend/tests/test_migracoes.py` | 6 | migração aditiva contra o esquema antigo, índice único, idempotência, recusa de NOT NULL |
+| `backend/tests/test_api.py` | 83 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista, CORS, perfil, locais salvos, pagamento, histórico, avaliações, paradas, chat, link público, oferta e aceite |
+| `backend/tests/test_migracoes.py` | 7 | migração aditiva contra o esquema antigo, índice único, idempotência, recusa de NOT NULL, conta antiga segue entrando |
 | `backend/tests/test_ws.py` | 16 | tempo real, isolamento entre corridas, laço que expira ofertas |
+| `backend/tests/test_auth.py` | 20 | senha forte, código por e-mail, bloqueio por tentativas, recuperar senha, sessão renovável com detecção de reuso, Google |
 
 `frontend/web/e2e/fluxo.py` (Playwright) ainda usa a interface do front antigo.
 

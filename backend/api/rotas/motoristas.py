@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,10 @@ def definir_disponibilidade(dados: DisponibilidadeEntrada,
                             motorista: Motorista = Depends(motorista_atual),
                             registro=Depends(obter_registro),
                             sessao: Session = Depends(obter_sessao)):
+    if dados.disponivel and not (motorista.placa or "").strip():
+        # Conta criada pelo Google nao informou a placa.
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "cadastre a placa do carro no seu perfil antes de ficar online")
     motorista.disponivel = dados.disponivel
     sessao.commit()
     registro.definir_disponibilidade(motorista.id, dados.disponivel)

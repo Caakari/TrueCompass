@@ -194,7 +194,7 @@ function useContagem() {
 }
 
 export function Entrada({ centro, falhaBackend, aoEntrar }:
-  { centro: Ponto | null; falhaBackend: string | null; aoEntrar: (s: Sessao, de: { x: number; y: number }, manter: boolean) => void }) {
+  { centro: Ponto | null; falhaBackend: string | null; aoEntrar: (s: Sessao, de: { x: number; y: number }) => void }) {
   const [etapa, definirEtapa] = useState<Etapa>('entrar')
   const [tipo, definirTipo] = useState<TipoUsuario>('passageiro')
   const [nome, definirNome] = useState('')
@@ -208,7 +208,10 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
   const [aviso, definirAviso] = useState<string | null>(null)
   const [enviando, definirEnviando] = useState(false)
   const [comGoogle, definirComGoogle] = useState(false)
-  const [bloqueio, definirBloqueio] = useContagem()
+  const [contagemBloqueio, definirBloqueio] = useContagem()
+  // O bloqueio vale para a etapa que o causou: o login bloqueado não pode
+  // travar o "Esqueci minha senha", que é justamente a saída.
+  const [etapaBloqueada, definirEtapaBloqueada] = useState<Etapa | null>(null)
   const [reenvio, definirReenvio] = useContagem()
   const botaoRef = useRef<HTMLDivElement>(null)
   // A agulha gira procurando e "acha o norte" quando a tela abre.
@@ -219,6 +222,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
   }, [])
 
   const registrando = etapa === 'registrar'
+  const bloqueio = etapa === etapaBloqueada ? contagemBloqueio : 0
   const principal = etapa === 'entrar' || etapa === 'registrar'
   // Marca grande só no "Entrar"; nas outras etapas o formulário é longo e a
   // bússola encolhe para ele caber sem rolar.
@@ -234,7 +238,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
     vibrar([15, 40, 15])
     const caixa = botaoRef.current?.getBoundingClientRect()
     aoEntrar(sessao, caixa ? { x: caixa.left + caixa.width / 2, y: caixa.top + caixa.height / 2 }
-                           : { x: window.innerWidth / 2, y: window.innerHeight / 2 }, manter)
+                           : { x: window.innerWidth / 2, y: window.innerHeight / 2 })
   }
 
   function falhou(falha: unknown) {
@@ -242,6 +246,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
     const e = falha as ErroApi
     if (e.status === 429 && e.esperarSegundos) {
       definirBloqueio(e.esperarSegundos)
+      definirEtapaBloqueada(etapa)
       definirErro(null)
       return
     }
@@ -280,7 +285,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
         else entrou(r)
       })
     } else if (etapa === 'confirmar') {
-      executar(async () => entrou(await api.confirmarEmail(email, codigo)))
+      executar(async () => entrou(await api.confirmarEmail(email, codigo, manter)))
     } else if (etapa === 'recuperar') {
       executar(async () => {
         await api.recuperarSenha(email)
@@ -288,7 +293,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
       })
     } else if (etapa === 'redefinir') {
       if (!forcaOk) { definirErro('Escolha uma senha mais forte.'); vibrar([40, 30, 40]); return }
-      executar(async () => entrou(await api.redefinirSenha(email, codigo, senha)))
+      executar(async () => entrou(await api.redefinirSenha(email, codigo, senha, manter)))
     }
   }
 
@@ -353,21 +358,22 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
       <motion.form className="entrada-form" onSubmit={enviar} noValidate={etapa === 'confirmar' || etapa === 'redefinir'}
                    initial={{ opacity: 0, y: 120 }} animate={{ opacity: 1, y: 0 }}
                    transition={{ delay: 0.5, type: 'spring', stiffness: 160, damping: 22 }}>
-        {/* Troca de etapa SEM AnimatePresence "wait": o destaque das abas e o
-            check do perfil são layoutId, e layoutId no conteúdo que sai prende
-            a saída para sempre (a etapa seguinte nunca entrava). Só entrada. */}
+        {/* NENHUM layoutId nesta tela (o destaque das abas e o check do perfil
+            são CSS). layoutId desmontado ou trocado de lugar aqui dentro deixava
+            a saída da tela pendurada: depois de trocar de aba e entrar, a tela de
+            login ficava montada, invisível, por trás do mapa — com o fundo
+            animado gastando bateria — e voltava com o estado antigo ao sair. */}
           <motion.div key={principal ? 'principal' : etapa} className="entrada-etapa"
                       initial={{ opacity: 0, x: principal ? -30 : 30 }} animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.25 }}>
 
             {principal && (
               <>
-                <div className="segmentado" role="tablist">
+                <div className={`segmentado ${registrando ? 'na-direita' : ''}`} role="tablist">
+                  <span className="segmento-fundo deslizante" aria-hidden="true" />
                   {(['entrar', 'registrar'] as const).map((chave) => (
                     <button key={chave} type="button" role="tab" aria-selected={etapa === chave}
                             className={etapa === chave ? 'ativo' : ''} onClick={() => irPara(chave)}>
-                      {etapa === chave && <motion.span layoutId="segmento" className="segmento-fundo"
-                                                       transition={{ type: 'spring', stiffness: 500, damping: 34 }} />}
                       <span>{chave === 'entrar' ? 'Entrar' : 'Criar conta'}</span>
                     </button>
                   ))}
@@ -390,7 +396,8 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
                             </motion.span>
                             <b>{titulo}</b><small>{nota}</small>
                             {tipo === chave && (
-                              <motion.span className="perfil-check" layoutId="perfil-check" transition={{ type: 'spring', stiffness: 500, damping: 30 }}>
+                              <motion.span className="perfil-check" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                           transition={{ type: 'spring', stiffness: 500, damping: 26 }}>
                                 <Icone nome="check" tamanho={12} traco={3.4} />
                               </motion.span>
                             )}
@@ -456,8 +463,10 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
                 <span className="etapa-selo"><Icone nome="cadeado" tamanho={26} /></span>
                 <h2>Esqueceu a senha?</h2>
                 <p>Digite o e-mail da sua conta. Enviaremos um código para você criar uma senha nova.</p>
-                <Campo id="email-recuperar" rotulo="E-mail" type="email" value={email} required autoComplete="username"
-                       inputMode="email" onChange={(e) => definirEmail(e.target.value)} />
+                <AnimatePresence initial={false}>
+                  <Campo id="email-recuperar" rotulo="E-mail" type="email" value={email} required autoComplete="username"
+                         inputMode="email" onChange={(e) => definirEmail(e.target.value)} />
+                </AnimatePresence>
               </div>
             )}
 
@@ -470,8 +479,13 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
                 <h2>Crie uma senha nova</h2>
                 <p>Digite o código que enviamos para <b>{emailMascarado(email)}</b> e a senha nova.</p>
                 <CodigoVerificacao valor={codigo} definir={definirCodigo} erro={Boolean(erro)} />
-                <CampoSenha id="nova-senha" rotulo="Senha nova" valor={senha} definir={definirSenha} nova />
-                <AnimatePresence><MedidorSenha senha={senha} email={email} /></AnimatePresence>
+                {/* Campos com `exit` SEMPRE dentro de um AnimatePresence próprio:
+                    solto, o campo se registra no AnimatePresence do App, e a
+                    tela de login nunca terminava de sair depois de entrar. */}
+                <AnimatePresence initial={false}>
+                  <CampoSenha key="nova-senha" id="nova-senha" rotulo="Senha nova" valor={senha} definir={definirSenha} nova />
+                  <MedidorSenha key="medidor" senha={senha} email={email} />
+                </AnimatePresence>
               </div>
             )}
           </motion.div>

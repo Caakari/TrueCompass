@@ -54,6 +54,7 @@ def test_acrescenta_as_colunas_novas_e_preserva_as_linhas():
         feitas = migrar(engine, Base.metadata)
         assert "usuarios.telefone" in feitas and "corridas.categoria" in feitas
         assert "motoristas.cor_carro" in feitas
+        assert {"usuarios.email_confirmado", "usuarios.google_sub"} <= set(feitas)
         colunas = {c["name"] for c in inspect(engine).get_columns("corridas")}
         assert {"categoria", "forma_pagamento", "origem_texto", "destino_texto"} <= colunas
         with engine.connect() as conexao:
@@ -71,7 +72,8 @@ def test_tabelas_novas_sao_criadas_pelo_create_all():
         Base.metadata.create_all(engine)
         migrar(engine, Base.metadata)
         tabelas = set(inspect(engine).get_table_names())
-        assert {"locais_salvos", "avaliacoes", "corrida_paradas", "mensagens", "ofertas"} <= tabelas
+        assert {"locais_salvos", "avaliacoes", "corrida_paradas", "mensagens", "ofertas",
+                "codigos_verificacao", "sessoes_renovacao"} <= tabelas
     finally:
         engine.dispose()
         os.unlink(caminho)
@@ -98,6 +100,22 @@ def test_e_idempotente():
         assert migrar(engine, Base.metadata)
         assert migrar(engine, Base.metadata) == [], "a segunda passada nao tem o que fazer"
         assert colunas_ausentes(engine, Base.metadata) == []
+    finally:
+        engine.dispose()
+        os.unlink(caminho)
+
+
+def test_conta_antiga_continua_entrando_depois_da_migracao():
+    """email_confirmado chega NULL nas linhas antigas, e NULL conta como
+    confirmado: ninguem que ja tinha conta e barrado pelo codigo."""
+    engine, caminho = banco_antigo()
+    try:
+        Base.metadata.create_all(engine)
+        migrar(engine, Base.metadata)
+        with engine.connect() as conexao:
+            confirmado = conexao.execute(text("SELECT email_confirmado FROM usuarios WHERE id = 1")).scalar()
+        assert confirmado is None
+        assert confirmado is not False, "o login so barra quem e False"
     finally:
         engine.dispose()
         os.unlink(caminho)

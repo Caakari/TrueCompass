@@ -31,6 +31,11 @@ class Usuario(Base):
     # a migracao aditiva (infra.migracoes) precisa disso nas linhas antigas.
     telefone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     cor_avatar: Mapped[str | None] = mapped_column(String(7), nullable=True)   # "#2F8A4C"
+    # NULL = conta anterior a confirmacao de e-mail: conta como confirmada.
+    # False = cadastrou e ainda nao digitou o codigo.
+    email_confirmado: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Conta ligada ao Google (o "sub" do Google, estavel; o e-mail pode mudar).
+    google_sub: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
 
     motorista: Mapped["Motorista"] = relationship(back_populates="usuario",
                                                   uselist=False)
@@ -208,3 +213,32 @@ class Oferta(Base):
     criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
     expira_em: Mapped[datetime] = mapped_column(DateTime)
     respondida_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CodigoVerificacao(Base):
+    """Codigo de 6 digitos mandado por e-mail (confirmar conta ou recuperar
+    senha). Guardado como HMAC, nunca em texto: quem le o banco nao entra."""
+    __tablename__ = "codigos_verificacao"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    finalidade: Mapped[str] = mapped_column(String(12))        # confirmar | recuperar
+    codigo_hash: Mapped[str] = mapped_column(String(64))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime)
+    tentativas: Mapped[int] = mapped_column(Integer, default=0)
+    usado_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SessaoRenovacao(Base):
+    """Token de renovacao do "manter conectado". Guardado como SHA-256; e
+    TROCADO a cada uso (rotacao): um token velho usado de novo indica roubo,
+    e derruba todas as sessoes da conta."""
+    __tablename__ = "sessoes_renovacao"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    criada_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    expira_em: Mapped[datetime] = mapped_column(DateTime)
+    revogada_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

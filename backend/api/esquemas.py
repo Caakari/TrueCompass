@@ -18,7 +18,8 @@ class RegistroEntrada(BaseModel):
 
 class LoginEntrada(BaseModel):
     email: EmailStr
-    senha: str
+    senha: str = Field(max_length=200)
+    manter_conectado: bool = False
 
 
 class TokenSaida(BaseModel):
@@ -26,6 +27,45 @@ class TokenSaida(BaseModel):
     tipo_token: str = "bearer"
     usuario_id: int
     tipo: str
+    # So com "manter conectado": troca-se por um token novo em /auth/renovar.
+    renovacao: str | None = None
+
+
+class PendenteSaida(BaseModel):
+    confirmacao_pendente: bool = True
+    email: str
+
+
+class ConfirmarEmailEntrada(BaseModel):
+    email: EmailStr
+    codigo: str = Field(min_length=1, max_length=12)
+    manter_conectado: bool = True
+
+
+class EnviarCodigoEntrada(BaseModel):
+    email: EmailStr
+    finalidade: Literal["confirmar", "recuperar"] = "recuperar"
+
+
+class RecuperarEntrada(BaseModel):
+    email: EmailStr
+
+
+class RedefinirEntrada(BaseModel):
+    email: EmailStr
+    codigo: str = Field(min_length=1, max_length=12)
+    senha: str = Field(min_length=8, max_length=72)
+    manter_conectado: bool = True
+
+
+class GoogleEntrada(BaseModel):
+    credencial: str = Field(min_length=10, max_length=4096)
+    tipo: Literal["passageiro", "motorista"] | None = None
+    manter_conectado: bool = True
+
+
+class RenovarEntrada(BaseModel):
+    renovacao: str = Field(min_length=10, max_length=200)
 
 
 class PosicaoEntrada(BaseModel):

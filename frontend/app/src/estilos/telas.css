@@ -349,3 +349,7 @@
 .codigo input.cheia { border-color: color-mix(in srgb, var(--verde) 55%, var(--linha)); }
 .codigo.erro input { border-color: var(--vermelho); }
 .etapa-cabeca .medidor { align-self: stretch; text-align: left; }
+/* Destaque das abas Entrar/Criar conta: desliza em CSS (sem layoutId). */
+.segmentado { position: relative; }
+.segmento-fundo.deslizante { top: 4px; bottom: 4px; left: 4px; right: auto; width: calc(50% - 4px); transition: transform .38s cubic-bezier(.3, 1.3, .5, 1); }
+.segmentado.na-direita .segmento-fundo.deslizante { transform: translateX(100%); }

@@ -119,7 +119,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
 - `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (6)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (7), `test_auth.py` (20)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -232,6 +232,44 @@ Banco e migração:
 - Pagamento (Pix, cartão, dinheiro) é **simulado**: fica gravado na corrida,
   nenhuma cobrança real acontece.
 
+Conta e login (`api/rotas/auth.py`, `dominio/servicos/conta.py`, `dominio/limitador.py`):
+
+- Senha: 8+ caracteres, letras E números, não óbvia (lista de comuns) nem com o
+  e-mail. A MESMA regra no app (`avaliarSenha`) e no servidor (`problemas_da_senha`).
+- Código de 6 dígitos por e-mail (confirmar conta, recuperar senha): guardado
+  como **HMAC** com o segredo do JWT (10⁶ códigos quebrariam um SHA puro), vale
+  15 min, morre em 5 erros, e um código novo invalida o anterior.
+- Confirmação no cadastro **só liga com e-mail configurado** (Resend ou SMTP):
+  com `EMAIL_MODO=log` ninguém receberia o código. `email_confirmado` NULL
+  (conta antiga) conta como confirmado; só `False` barra o login (403
+  `email_nao_confirmado`, e o app vai para a tela do código).
+- Nada revela se um e-mail existe: recuperar e reenviar respondem 204 sempre, e
+  o login com e-mail inexistente confere a senha contra um hash falso (mesmo
+  tempo de bcrypt). Exceção inevitável: o 409 do cadastro.
+- Bloqueio por tentativas em MEMÓRIA (`Limites`, em `app.state`): 5 senhas
+  erradas por e-mail em 15 min → 5 min; 20 por IP → 15 min; 429 com
+  `Retry-After`, que o app vira contagem. O CORS **expõe** o `Retry-After`
+  (`expose_headers`): sem isso o navegador o esconde do JS entre domínios. Um
+  processo só (o grafo já exige); com várias instâncias, isto iria para um Redis.
+- "Manter conectado" = token de renovação (30 dias) guardado como SHA-256 e
+  **trocado a cada uso**. Token já trocado usado de novo = vazou: derruba todas
+  as sessões da conta. Trocar a senha também derruba. Sem "manter", a sessão
+  vai para o `sessionStorage` (acaba com a aba) e não há renovação.
+- No app, cada token de renovação é trocado UMA vez (`lib/sessao.ts` guarda a
+  promessa por token): vários 401 da mesma leva pediriam a troca com o token
+  velho depois da primeira — o servidor leria como roubo e deslogaria a pessoa.
+  Aconteceu no teste ponta a ponta.
+- Google: fluxo de TOKEN do Google Identity Services (o botão continua com o
+  visual do app). O servidor confere no `tokeninfo` que o token foi emitido
+  para o NOSSO client id antes de usar o `userinfo` — sem isso, um token de
+  outro site entraria aqui (confused deputy). E-mail já cadastrado é LIGADO à
+  conta existente (o Google confirmou o e-mail). Motorista pelo Google entra sem
+  placa e não fica online até cadastrá-la (409).
+- **Nenhum `layoutId` na tela de login.** O destaque das abas e o check do
+  perfil com layoutId, depois de trocar de aba e entrar, deixavam a tela de
+  login montada e invisível por trás do mapa (o fundo animado gastando bateria)
+  e ela voltava com o estado antigo ao sair. Destaque e check são CSS.
+
 Paradas, chat e compartilhamento:
 
 - Até **3 paradas**, em `corrida_paradas` (tabela própria, com o nó ancorado).
@@ -309,6 +347,11 @@ Decisões do front-end:
   tema escuro de verdade, não inversão de cores. Grátis, sem chave, sem
   limite. Rótulos trocados para `name:pt → name` (os estilos preferem latim:
   "Sao Paulo"). O MapLibre (~300 KB gz) carrega sob demanda, só no mapa.
+- O MapLibre procura o worker AO LADO do próprio arquivo, e o Vite não o copia:
+  o vetorial falhava SEMPRE ("Worker failed to load") e caía no raster. Corrigido
+  com `maplibre-gl/dist/maplibre-gl-worker.mjs?url` + `setWorkerUrl`. Teste do
+  vetorial tem de usar tiles reais: com estilo falso sem fontes, nenhum worker é
+  pedido e o defeito não aparece.
 - Cascata de fallback do fundo: vetorial → (erro antes do `load`, sem WebGL,
   ou 15 s sem carregar) tiles raster do OSM com filtro cinza → (8 falhas
   seguidas) malha do algoritmo (`aoFalharTiles`). Testado no navegador com o

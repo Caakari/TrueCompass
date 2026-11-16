@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { api, definirAoExpirar } from './api'
+import { gravarSessao, lerSessao, renovar, venceEm } from './lib/sessao'
 import { gravarArmazenado, lerArmazenado, movimentoReduzido } from './lib/util'
 import { Acompanhar } from './telas/Acompanhar'
 import { Entrada } from './telas/Entrada'
@@ -10,7 +11,6 @@ import { Passageiro } from './telas/Passageiro'
 import type { Malha, Sessao, Tema } from './tipos'
 import { Bussola } from './ui/Bussola'
 
-const CHAVE_SESSAO = 'truecompass.sessao'
 const CHAVE_TEMA = 'truecompass.tema'
 
 function temaInicial(): Tema {
@@ -30,7 +30,7 @@ function codigoDeAcompanhamento(): string | null {
 export default function App() {
   // Link compartilhado: abre direto o acompanhamento, sem login.
   const [codigo] = useState(codigoDeAcompanhamento)
-  const [sessao, definirSessao] = useState<Sessao | null>(() => lerArmazenado<Sessao>(CHAVE_SESSAO))
+  const [sessao, definirSessao] = useState<Sessao | null>(lerSessao)
   const [tema, definirTema] = useState<Tema>(temaInicial)
   const [malha, definirMalha] = useState<Malha | null>(null)
   const [falhaBackend, definirFalhaBackend] = useState<string | null>(null)
@@ -42,8 +42,34 @@ export default function App() {
     gravarArmazenado(CHAVE_TEMA, tema)
   }, [tema])
 
-  useEffect(() => { gravarArmazenado(CHAVE_SESSAO, sessao) }, [sessao])
-  useEffect(() => { definirAoExpirar(() => definirSessao(null)) }, [])
+  useEffect(() => { gravarSessao(sessao) }, [sessao])
+
+  // Token venceu numa chamada (401): com "manter conectado", renova e segue
+  // logado; sem, volta ao login.
+  const sessaoRef = useRef(sessao)
+  sessaoRef.current = sessao
+  useEffect(() => {
+    definirAoExpirar(() => {
+      const atual = sessaoRef.current
+      if (!atual?.renovacao) { definirSessao(null); return }
+      renovar(atual).then(definirSessao).catch(() => definirSessao(null))
+    })
+  }, [])
+
+  // Renova 5 min ANTES de vencer, para nenhuma chamada pegar o 401. Se já
+  // venceu (app aberto depois de dias), renova na hora.
+  useEffect(() => {
+    if (!sessao?.renovacao) return
+    const vence = venceEm(sessao.token)
+    if (vence == null) return
+    const espera = Math.min(Math.max(vence - Date.now() - 5 * 60_000, 0), 2 ** 31 - 1)
+    const id = setTimeout(() => {
+      renovar(sessao).then(definirSessao).catch((f: Error & { status?: number }) => {
+        if (f.status === 401) definirSessao(null)       // sessão encerrada no servidor
+      })
+    }, espera)
+    return () => clearTimeout(id)
+  }, [sessao?.token])
 
   // Informações da malha: UMA vez, compartilhadas. A geometria das ruas não
   // vem inteira (a cidade toda tem centenas de milhares de trechos): o mapa
@@ -85,7 +111,7 @@ export default function App() {
 
   // Entrar: a tela de login se fecha numa ÍRIS a partir do botão tocado, e o
   // mapa aparece por trás.
-  function aoEntrar(nova: Sessao, de: { x: number; y: number }, _manter = true) {
+  function aoEntrar(nova: Sessao, de: { x: number; y: number }) {
     if (movimentoReduzido()) { definirSessao(nova); return }
     definirIris(de)
     setTimeout(() => definirSessao(nova), 520)
@@ -94,6 +120,9 @@ export default function App() {
 
   const sair = () => {
     gravarArmazenado('truecompass.corrida', null)
+    // Encerra a sessão deste aparelho no servidor (o token de renovação
+    // deixa de valer), sem esperar a resposta.
+    if (sessao?.renovacao) api.sair(sessao.renovacao).catch(() => {})
     definirSessao(null)
   }
 

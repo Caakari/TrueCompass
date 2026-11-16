@@ -144,6 +144,24 @@ Copie `backend/.env.exemplo` para `backend/.env`. Só `JWT_SECRET` é realmente
 obrigatória em desenvolvimento; o resto tem padrão razoável. Caminhos
 relativos (como `MALHA_ARQUIVO`) partem de `backend/`.
 
+### Login: e-mail com código e "Continuar com Google"
+
+Sem nada configurado, o login funciona como antes: o cadastro abre a conta na
+hora e o "Continuar com Google" avisa que não está configurado. Em
+desenvolvimento, `EMAIL_MODO=log CONFIRMAR_EMAIL=1` liga a confirmação e
+escreve o código no log do servidor.
+
+- **E-mail (código de 6 dígitos):** defina `RESEND_API_KEY` no Railway (conta
+  grátis em resend.com, até 100 e-mails/dia). Sem domínio próprio verificado na
+  Resend, ela só entrega no e-mail do dono da conta — para testar basta; para
+  todo mundo, verifique um domínio e ajuste `EMAIL_REMETENTE`. Com e-mail
+  configurado, a confirmação no cadastro liga sozinha.
+- **Google:** no Google Cloud Console → APIs e serviços → Credenciais → Criar
+  credenciais → ID do cliente OAuth → "Aplicativo da Web". Em "Origens
+  JavaScript autorizadas", ponha o domínio do Vercel (e `http://localhost:5180`
+  para testar). Copie o ID para `GOOGLE_CLIENT_ID` (Railway) **e**
+  `VITE_GOOGLE_CLIENT_ID` (Vercel) — é o mesmo valor, e não é segredo.
+
 ## Organização das pastas
 
 ```

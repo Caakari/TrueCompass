@@ -14,6 +14,7 @@ from algoritmos.indice_espacial import indice_dos_nos
 from api.conexoes import GerenciadorConexoes
 from api.rotas import auth, corridas, lugares, malha, motoristas, publico, usuarios, viagens, ws
 from api.rotas.malha import resumo_da_malha
+from dominio.limitador import Limites
 from dominio.estados import validar_dag
 from dominio.registro import RegistroMotoristas
 from infra.banco import criar_tabelas
@@ -229,7 +230,12 @@ def criar_app():
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Sem isto o navegador esconde o Retry-After do JavaScript (front e
+        # back em dominios diferentes), e o app nao saberia contar o bloqueio.
+        expose_headers=["Retry-After"],
     )
+    # Limites de tentativa (login, codigo, reenvio): em memoria, por processo.
+    app.state.limites = Limites()
     for modulo in (auth, usuarios, motoristas, corridas, malha, lugares, viagens, publico, ws):
         app.include_router(modulo.rotas)
 

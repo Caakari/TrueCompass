@@ -79,6 +79,27 @@ class Config:
         self.prazo_oferta_s = float(os.getenv("OFERTA_PRAZO_S", "20"))
         self.ambiente = os.getenv("AMBIENTE", "desenvolvimento")
 
+        # ---- conta e login
+        # Envio de e-mail: resend (API, recomendado), smtp, log (o codigo vai
+        # para o log do servidor) ou memoria (testes). Sem escolha explicita,
+        # decide pelo que estiver configurado.
+        self.resend_chave = os.getenv("RESEND_API_KEY", "")
+        self.smtp_host = os.getenv("SMTP_HOST", "")
+        self.smtp_porta = int(os.getenv("SMTP_PORTA", "587"))
+        self.smtp_usuario = os.getenv("SMTP_USUARIO", "")
+        self.smtp_senha = os.getenv("SMTP_SENHA", "")
+        self.email_remetente = os.getenv("EMAIL_REMETENTE", "TrueCompass <onboarding@resend.dev>")
+        self.email_modo = os.getenv("EMAIL_MODO", "") or (
+            "resend" if self.resend_chave else "smtp" if self.smtp_host else "log")
+        # Confirmar o e-mail no cadastro so faz sentido se o codigo CHEGA a
+        # pessoa: com o modo "log" ninguem conseguiria se cadastrar.
+        padrao_confirmar = "1" if self.email_modo in ("resend", "smtp") else "0"
+        self.confirmar_email = os.getenv("CONFIRMAR_EMAIL", padrao_confirmar) not in ("0", "false")
+        self.google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+        # "Manter conectado": o token de acesso dura JWT_HORAS; o de
+        # renovacao, estes dias (e e trocado a cada uso).
+        self.dias_renovacao = int(os.getenv("RENOVACAO_DIAS", "30"))
+
     @property
     def producao(self):
         return self.ambiente == "producao"

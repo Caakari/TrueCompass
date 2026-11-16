@@ -98,14 +98,15 @@ export const api = {
     pedir<Sessao>('/auth/login', { metodo: 'POST', corpo: { email, senha, manter_conectado: manterConectado } }),
   entrarComGoogle: (credencial: string, tipo?: TipoUsuario, manterConectado = true) =>
     pedir<Sessao>('/auth/google', { metodo: 'POST', corpo: { credencial, tipo, manter_conectado: manterConectado } }),
-  confirmarEmail: (email: string, codigo: string) =>
-    pedir<Sessao>('/auth/confirmar-email', { metodo: 'POST', corpo: { email, codigo } }),
+  confirmarEmail: (email: string, codigo: string, manterConectado = true) =>
+    pedir<Sessao>('/auth/confirmar-email', { metodo: 'POST', corpo: { email, codigo, manter_conectado: manterConectado } }),
   reenviarCodigo: (email: string, finalidade: 'confirmar' | 'recuperar') =>
     pedir<null>('/auth/reenviar-codigo', { metodo: 'POST', corpo: { email, finalidade } }),
   recuperarSenha: (email: string) =>
     pedir<null>('/auth/recuperar-senha', { metodo: 'POST', corpo: { email } }),
-  redefinirSenha: (email: string, codigo: string, senha: string) =>
-    pedir<Sessao>('/auth/redefinir-senha', { metodo: 'POST', corpo: { email, codigo, senha } }),
+  redefinirSenha: (email: string, codigo: string, senha: string, manterConectado = true) =>
+    pedir<Sessao>('/auth/redefinir-senha', { metodo: 'POST', corpo: { email, codigo, senha, manter_conectado: manterConectado } }),
+  sair: (renovacao: string) => pedir<null>('/auth/sair', { metodo: 'POST', corpo: { renovacao } }),
   renovarSessao: (renovacao: string) =>
     pedir<Sessao>('/auth/renovar', { metodo: 'POST', corpo: { renovacao } }),
 
