@@ -18,7 +18,12 @@ export interface Sessao {
   tipo_token: string
   usuario_id: number
   tipo: TipoUsuario
+  /** Token de renovação: só com "manter conectado". */
+  renovacao?: string | null
 }
+
+/** Cadastro por e-mail: a conta só abre depois do código confirmado. */
+export interface ConfirmacaoPendente { confirmacao_pendente: true; email: string }
 
 export interface Caixa { sul: number; oeste: number; norte: number; leste: number }
 

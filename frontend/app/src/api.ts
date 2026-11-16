@@ -8,13 +8,13 @@
 import type {
   Caixa, Corrida, EdicaoPerfil, Estimativa, FormaPagamento, IdCategoria, InfoMalha, ItemHistorico, Lugar,
   Acompanhamento, LocalSalvo, Mensagem, Perfil, Ponto, RespostaPosicao, ResumoMotorista, Rota, TipoLocal,
-  Semaforo, Sessao, TipoUsuario, Trecho,
+  Semaforo, Sessao, TipoUsuario, Trecho, ConfirmacaoPendente,
 } from './tipos'
 
 const BASE: string = import.meta.env.VITE_API_URL || '/api'
 
 export class ErroApi extends Error {
-  constructor(mensagem: string, readonly status: number) {
+  constructor(mensagem: string, readonly status: number, readonly esperarSegundos: number | null = null) {
     super(mensagem)
   }
 }
@@ -54,7 +54,10 @@ async function pedir<T>(caminho: string, { metodo = 'GET', corpo, token, sinal }
 
   if (!resposta.ok) {
     if (resposta.status === 401 && token) aoExpirar?.()
-    throw new ErroApi(mensagemDeErro(dados, resposta.status), resposta.status)
+    // 429: o servidor diz quanto esperar (Retry-After) e a tela conta o tempo.
+    const espera = Number(resposta.headers.get('Retry-After'))
+    throw new ErroApi(mensagemDeErro(dados, resposta.status), resposta.status,
+                      Number.isFinite(espera) && espera > 0 ? espera : null)
   }
   return dados as T
 }
@@ -90,9 +93,21 @@ const corpoViagem = (origem: Ponto, destino: Ponto) => ({
 export const api = {
   // ---- autenticação
   registrar: (dados: DadosRegistro) =>
-    pedir<Sessao>('/auth/registro', { metodo: 'POST', corpo: dados }),
-  entrar: (email: string, senha: string) =>
-    pedir<Sessao>('/auth/login', { metodo: 'POST', corpo: { email, senha } }),
+    pedir<Sessao | ConfirmacaoPendente>('/auth/registro', { metodo: 'POST', corpo: dados }),
+  entrar: (email: string, senha: string, manterConectado = false) =>
+    pedir<Sessao>('/auth/login', { metodo: 'POST', corpo: { email, senha, manter_conectado: manterConectado } }),
+  entrarComGoogle: (credencial: string, tipo?: TipoUsuario, manterConectado = true) =>
+    pedir<Sessao>('/auth/google', { metodo: 'POST', corpo: { credencial, tipo, manter_conectado: manterConectado } }),
+  confirmarEmail: (email: string, codigo: string) =>
+    pedir<Sessao>('/auth/confirmar-email', { metodo: 'POST', corpo: { email, codigo } }),
+  reenviarCodigo: (email: string, finalidade: 'confirmar' | 'recuperar') =>
+    pedir<null>('/auth/reenviar-codigo', { metodo: 'POST', corpo: { email, finalidade } }),
+  recuperarSenha: (email: string) =>
+    pedir<null>('/auth/recuperar-senha', { metodo: 'POST', corpo: { email } }),
+  redefinirSenha: (email: string, codigo: string, senha: string) =>
+    pedir<Sessao>('/auth/redefinir-senha', { metodo: 'POST', corpo: { email, codigo, senha } }),
+  renovarSessao: (renovacao: string) =>
+    pedir<Sessao>('/auth/renovar', { metodo: 'POST', corpo: { renovacao } }),
 
   // ---- malha (pública: geometria de dado aberto)
   infoDaMalha: () => pedir<InfoMalha>('/malha/info'),

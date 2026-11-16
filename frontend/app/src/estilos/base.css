@@ -208,6 +208,7 @@ input { font: inherit; }
 .aviso svg { flex-shrink: 0; margin-top: 1px; }
 .aviso.erro { background: var(--vermelho-dim); color: var(--vermelho-claro); }
 :root[data-tema="claro"] .aviso.erro { color: var(--vermelho); }
+.aviso.ok { background: var(--verde-dim); color: var(--verde); }
 
 .confete { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
 

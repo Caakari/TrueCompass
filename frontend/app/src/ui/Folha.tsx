@@ -115,14 +115,14 @@ export function Folha({ children, chave, aoMedir, recolher = 0, fracaoMaxima }: 
 }
 
 export function Aviso({ tipo = 'neutro', icone = 'aviso', children }:
-  { tipo?: 'neutro' | 'erro'; icone?: string; children: ReactNode }) {
+  { tipo?: 'neutro' | 'erro' | 'ok'; icone?: string; children: ReactNode }) {
   return (
     <motion.div className={`aviso ${tipo}`} role={tipo === 'erro' ? 'alert' : undefined}
                 initial={{ opacity: 0, height: 0, scale: 0.96 }}
                 animate={{ opacity: 1, height: 'auto', scale: 1, x: tipo === 'erro' ? [0, -7, 6, -4, 3, 0] : 0 }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ x: { duration: 0.42 }, default: { type: 'spring', stiffness: 360, damping: 30 } }}>
-      <Icone nome={icone} tamanho={17} />
+      <Icone nome={tipo === 'ok' && icone === 'aviso' ? 'check' : icone} tamanho={17} />
       <div>{children}</div>
     </motion.div>
   )

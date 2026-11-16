@@ -85,7 +85,7 @@ export default function App() {
 
   // Entrar: a tela de login se fecha numa ÍRIS a partir do botão tocado, e o
   // mapa aparece por trás.
-  function aoEntrar(nova: Sessao, de: { x: number; y: number }) {
+  function aoEntrar(nova: Sessao, de: { x: number; y: number }, _manter = true) {
     if (movimentoReduzido()) { definirSessao(nova); return }
     definirIris(de)
     setTimeout(() => definirSessao(nova), 520)

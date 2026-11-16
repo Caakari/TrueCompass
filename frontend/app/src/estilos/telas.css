@@ -268,3 +268,84 @@
 .oferta-segundos { font: 700 13px 'IBM Plex Mono', monospace; color: var(--texto-dim); }
 /* O cartão centraliza os filhos (align-items: center): sem largura própria a barra encolheria a zero. */
 .chegada-cartao .barra-prazo { width: 100%; }
+
+/* ============================================================ login novo */
+.entrada-etapa { display: flex; flex-direction: column; gap: 12px; }
+.entrada-heroi.compacto { padding-top: calc(var(--seguro-topo) + 18px); padding-bottom: 4px; gap: 0; }
+.entrada-heroi.compacto .marca { margin-top: -18px; font-size: 26px; }
+
+/* Botão do Google: branco nos dois temas (regra de marca do Google). */
+.botao-google {
+  height: 54px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px;
+  border-radius: 15px; border: 1.5px solid var(--linha-forte); background: #fff; color: #1F1F1F;
+  font: 600 15.5px 'Inter', sans-serif; box-shadow: var(--sombra-suave);
+}
+.botao-google:disabled { opacity: .7; }
+.botao-google .giro { border-color: #ddd; border-top-color: #1F1F1F; }
+.divisor { display: flex; align-items: center; gap: 12px; color: var(--texto-fraco); font-size: 12.5px; margin: 2px 0; }
+.divisor::before, .divisor::after { content: ''; flex: 1; height: 1px; background: var(--linha); }
+
+/* Olho da senha, dentro do campo */
+.campo.com-acessorio input { padding-right: 52px; }
+.campo-olho {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 42px; height: 42px; border: 0; border-radius: 12px; background: none;
+  display: grid; place-items: center; color: var(--texto-dim);
+}
+.campo-olho:active { background: var(--cartao); }
+
+/* Manter conectado + esqueci a senha */
+.entrada-opcoes { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; }
+.manter { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; color: var(--texto-dim); cursor: pointer; user-select: none; }
+.manter input { position: absolute; opacity: 0; pointer-events: none; }
+.manter-caixa {
+  width: 22px; height: 22px; border-radius: 7px; border: 1.8px solid var(--linha-forte); display: grid; place-items: center;
+  color: transparent; transition: background .2s, border-color .2s, color .2s;
+}
+.manter input:checked + .manter-caixa { background: var(--verde); border-color: var(--verde); color: var(--verde-sobre); }
+.manter input:focus-visible + .manter-caixa { outline: 2px solid var(--verde); outline-offset: 2px; }
+.link { border: 0; background: none; padding: 4px 0; color: var(--verde); font-weight: 600; font-size: 14px; }
+.link:disabled { color: var(--texto-fraco); font-weight: 500; }
+.texto-apoio.centro { text-align: center; }
+.texto-apoio.pequeno { font-size: 12px; }
+.texto-apoio .link { font-size: inherit; }
+
+/* Força da senha: 4 barras que enchem e mudam de cor + regras */
+.medidor { display: flex; flex-direction: column; gap: 8px; overflow: hidden; padding: 0 2px; }
+.medidor-topo { display: flex; align-items: center; gap: 12px; }
+.medidor-barras { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.medidor-barras span { height: 5px; border-radius: 3px; background: var(--linha); transition: background .3s; }
+.medidor-barras.nivel-0 .cheia, .medidor-barras.nivel-1 .cheia { background: var(--vermelho); }
+.medidor-barras.nivel-2 .cheia { background: #E0A030; }
+.medidor-barras.nivel-3 .cheia { background: #7DBE5A; }
+.medidor-barras.nivel-4 .cheia { background: var(--verde); }
+.medidor-rotulo { font-size: 12.5px; font-weight: 700; min-width: 74px; text-align: right; }
+.medidor-rotulo.nivel-0, .medidor-rotulo.nivel-1 { color: var(--vermelho); }
+.medidor-rotulo.nivel-2 { color: #E0A030; }
+.medidor-rotulo.nivel-3, .medidor-rotulo.nivel-4 { color: var(--verde); }
+.medidor-regras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--texto-dim); }
+.medidor-regras li { display: flex; align-items: center; gap: 7px; transition: color .25s; }
+.medidor-regras li.ok { color: var(--texto); }
+.medidor-marca { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--linha); color: var(--texto-fraco); transition: background .25s, color .25s; }
+.medidor-regras li.ok .medidor-marca { background: var(--verde); color: var(--verde-sobre); }
+
+/* Etapas secundárias: confirmar e-mail, recuperar e redefinir senha */
+.etapa-cabeca { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.etapa-cabeca > .botao-icone { position: absolute; left: -6px; top: -4px; }
+.etapa-cabeca h2 { margin: 2px 0 0; font: 700 22px 'Space Grotesk', sans-serif; letter-spacing: -.3px; }
+.etapa-cabeca p { margin: 0 0 6px; color: var(--texto-dim); font-size: 14px; line-height: 1.5; max-width: 320px; }
+.etapa-cabeca p b { color: var(--texto); }
+.etapa-cabeca .campo { width: 100%; }
+.etapa-selo { width: 58px; height: 58px; border-radius: 18px; display: grid; place-items: center; background: var(--verde-dim); color: var(--verde); }
+
+/* Código de 6 dígitos */
+.codigo { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 100%; margin: 4px 0; }
+.codigo input {
+  width: 100%; height: 58px; border-radius: 14px; border: 1.5px solid var(--linha); background: var(--cartao-alto);
+  color: var(--texto); text-align: center; font: 700 24px 'Space Grotesk', sans-serif; outline: none;
+  transition: border-color .2s, background .2s, transform .15s; caret-color: var(--verde);
+}
+.codigo input:focus { border-color: var(--verde); background: var(--cartao); transform: translateY(-2px); }
+.codigo input.cheia { border-color: color-mix(in srgb, var(--verde) 55%, var(--linha)); }
+.codigo.erro input { border-color: var(--vermelho); }
+.etapa-cabeca .medidor { align-self: stretch; text-align: left; }
