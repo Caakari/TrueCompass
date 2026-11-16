@@ -304,9 +304,17 @@ Decisões do front-end:
 - Marcadores são `circleMarker` (SVG) ou `divIcon` (HTML/CSS), **nunca** os
   ícones padrão do Leaflet: eles quebram sob bundler por causa do caminho
   relativo das imagens.
-- Tiles: os da **CARTO passaram a exigir chave de API** (aparecem com marca
-  d'água). Use os tiles padrão do OpenStreetMap; tema escuro = filtro CSS de
-  inversão sobre eles. O front antigo (`frontend/web/`) ainda aponta para a CARTO.
+- **Fundo do mapa: vetorial do OpenFreeMap** (MapLibre GL via
+  `@maplibre/maplibre-gl-leaflet`): Positron no tema claro, Dark no escuro —
+  tema escuro de verdade, não inversão de cores. Grátis, sem chave, sem
+  limite. Rótulos trocados para `name:pt → name` (os estilos preferem latim:
+  "Sao Paulo"). O MapLibre (~300 KB gz) carrega sob demanda, só no mapa.
+- Cascata de fallback do fundo: vetorial → (erro antes do `load`, sem WebGL,
+  ou 15 s sem carregar) tiles raster do OSM com filtro cinza → (8 falhas
+  seguidas) malha do algoritmo (`aoFalharTiles`). Testado no navegador com o
+  estilo substituído por um local e com os servidores bloqueados.
+- Tiles da **CARTO exigem chave de API** (aparecem com marca d'água): não usar.
+  O front antigo (`frontend/web/`) ainda aponta para a CARTO.
 - **`AnimatePresence mode="wait"` na troca de telas do App trava**: a tela de
   saída anima até opacidade 0 e nunca é desmontada. Use modo simultâneo com
   telas `position: absolute`. O `frontend/web/src/App.jsx` antigo ainda tem esse defeito

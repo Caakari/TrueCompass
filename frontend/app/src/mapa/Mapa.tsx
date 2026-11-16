@@ -14,11 +14,13 @@ import { CamadaOnda, type Onda } from './onda'
  * 1. MARCADORES SEM IMAGEM. Os ícones padrão do Leaflet quebram sob bundler
  *    (as imagens são resolvidas por caminho relativo ao CSS). Usamos
  *    `circleMarker` (SVG) e `divIcon` (HTML/CSS puro) — nenhum asset.
- * 2. TILES SÃO PANO DE FUNDO OPCIONAL. Quem roteia é o nosso grafo; os tiles
- *    só dão contexto. Após 8 falhas seguidas a camada sai e a malha do
- *    algoritmo assume o desenho das ruas (`aoFalharTiles`). São os tiles
- *    padrão do OpenStreetMap, sem chave de API (os da CARTO passaram a
- *    exigir uma); no tema escuro um filtro CSS os inverte (ver mapa.css).
+ * 2. O FUNDO É OPCIONAL. Quem roteia é o nosso grafo; o fundo só dá contexto
+ *    (e os nomes das ruas). Padrão: mapa VETORIAL do OpenFreeMap, desenhado
+ *    pelo MapLibre — Positron no claro e Dark no escuro, um tema escuro de
+ *    verdade, não uma inversão de cores. Grátis e sem chave. Se o WebGL ou o
+ *    estilo falharem, cai nos tiles raster do OpenStreetMap (filtro cinza);
+ *    se esses também falharem 8 vezes seguidas, a malha do algoritmo assume
+ *    o desenho das ruas (`aoFalharTiles`).
  * 3. MILHARES DE ELEMENTOS EM CANVAS. Semáforos e malha usam o renderizador
  *    canvas, e a malha vai em DUAS camadas multi-segmento (nunca uma por
  *    rua). A rota fica em SVG porque o desenho animado usa stroke-dashoffset.
@@ -28,6 +30,29 @@ import { CamadaOnda, type Onda } from './onda'
 
 const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const ATRIBUICAO = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+const ESTILO_VETORIAL: Record<Tema, string> = {
+  claro: 'https://tiles.openfreemap.org/styles/positron',
+  escuro: 'https://tiles.openfreemap.org/styles/dark',
+}
+const ATRIBUICAO_VETORIAL = '<a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> '
+  + ATRIBUICAO
+/** Sem carregar o estilo nesse prazo, desiste do vetorial e usa os tiles raster. */
+const PRAZO_VETORIAL_MS = 15000
+
+/**
+ * Rótulos em português: os estilos do OpenMapTiles preferem `name_en`/latim
+ * ("Sao Paulo"). Troca o texto de toda camada que mostra NOME por
+ * name:pt → name. Camadas de número de casa e afins ficam como estão.
+ */
+function rotulosEmPortugues(gl: import('maplibre-gl').Map) {
+  for (const camada of gl.getStyle().layers ?? []) {
+    if (camada.type !== 'symbol') continue
+    const texto = gl.getLayoutProperty(camada.id, 'text-field')
+    if (texto && JSON.stringify(texto).includes('name')) {
+      gl.setLayoutProperty(camada.id, 'text-field', ['coalesce', ['get', 'name:pt'], ['get', 'name']])
+    }
+  }
+}
 const ZOOM_SEMAFOROS = 15
 const ZOOM_MALHA = 14
 
@@ -205,25 +230,57 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
     }
   }, [])
 
-  // ------------------------------------------------- tiles, trocados com o tema
+  // ------------------------------------------- fundo do mapa, trocado com o tema
   useEffect(() => {
     const mapa = mapaRef.current
     if (!mapa) return
-    const tiles = L.tileLayer(TILES, { maxZoom: 19, attribution: ATRIBUICAO, className: 'tiles-osm' })
-    let falhas = 0
-    tiles.on('tileload', () => { falhas = 0 })
-    tiles.on('tileerror', () => {
-      if (++falhas === 8 && mapa.hasLayer(tiles)) {
-        mapa.removeLayer(tiles)
-        propsRef.current.aoFalharTiles?.()
-      }
-    })
-    tiles.addTo(mapa).bringToBack()
+    let vivo = true
+    let camada: L.Layer | null = null
+    let prazo: ReturnType<typeof setTimeout> | undefined
+
+    // Plano B: tiles raster do OSM (o fundo anterior), com o filtro cinza.
+    function usarRaster() {
+      if (!vivo || !mapa) return
+      if (camada) mapa.removeLayer(camada)
+      const tiles = L.tileLayer(TILES, { maxZoom: 19, attribution: ATRIBUICAO, className: 'tiles-osm' })
+      let falhas = 0
+      tiles.on('tileload', () => { falhas = 0 })
+      tiles.on('tileerror', () => {
+        if (++falhas === 8 && mapa.hasLayer(tiles)) {
+          mapa.removeLayer(tiles)
+          propsRef.current.aoFalharTiles?.()
+        }
+      })
+      camada = tiles.addTo(mapa)
+      tiles.bringToBack()
+    }
+
+    // Padrão: vetorial. Carregado sob demanda (o MapLibre é grande e só o
+    // mapa precisa dele); qualquer falha antes do 'load' cai no raster.
+    Promise.all([import('maplibre-gl'), import('@maplibre/maplibre-gl-leaflet'), import('maplibre-gl/dist/maplibre-gl.css')])
+      .then(([, { maplibreGL }]) => {
+        if (!vivo) return
+        const vetorial = maplibreGL({ style: ESTILO_VETORIAL[tema], attributionControl: { customAttribution: ATRIBUICAO_VETORIAL }, interactive: false })
+        camada = vetorial.addTo(mapa)
+        const gl = vetorial.getMaplibreMap()
+        let carregou = false
+        const desistir = (motivo: unknown) => {
+          if (carregou) return
+          clearTimeout(prazo)
+          console.warn('[mapa] fundo vetorial indisponível, usando tiles raster:', motivo)
+          usarRaster()
+        }
+        prazo = setTimeout(() => desistir('prazo esgotado'), PRAZO_VETORIAL_MS)
+        gl.on('load', () => { carregou = true; clearTimeout(prazo); rotulosEmPortugues(gl) })
+        gl.on('error', (e) => desistir(e.error?.message ?? e))
+      })
+      .catch((e) => { if (vivo) { console.warn('[mapa] MapLibre não carregou:', e); usarRaster() } })
+
     const rua = cor('--mapa-rua', '#6B7680')
     linha('malhaDupla').setStyle({ color: rua })
     linha('malhaUnica').setStyle({ color: rua })
     ondaRef.current?.atualizarCores()
-    return () => { mapa.removeLayer(tiles) }
+    return () => { vivo = false; clearTimeout(prazo); if (camada) mapa.removeLayer(camada) }
   }, [tema])
 
   useEffect(() => {
