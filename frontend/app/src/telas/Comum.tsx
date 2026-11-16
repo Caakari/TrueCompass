@@ -14,7 +14,9 @@ import { iniciais } from './Perfil'
  * Barra flutuante: conta à esquerda, título da fase ao centro, bússola à
  * direita. A bússola aponta o azimute inicial até o destino da vez.
  */
-export function BarraTopo({ rumo, rotuloRumo, titulo, buscando = false, menu }: {
+export function BarraTopo({ rumo, rotuloRumo, titulo, buscando = false, menu, perfil = null }: {
+  /** Com o perfil carregado, o botão mostra as iniciais na cor escolhida. */
+  perfil?: Perfil | null
   rumo: number | null
   rotuloRumo: string
   titulo: string | null
@@ -25,8 +27,16 @@ export function BarraTopo({ rumo, rotuloRumo, titulo, buscando = false, menu }: 
   return (
     <>
       <div className="barra-topo">
-        <BotaoRedondo rotulo="Conta e preferências" ativo={aberto} onClick={() => definirAberto(!aberto)}>
-          <Icone nome="usuario" />
+        <BotaoRedondo rotulo="Conta e preferências" ativo={aberto} onClick={() => definirAberto(!aberto)}
+                      className={perfil ? 'com-iniciais' : ''}>
+          {perfil
+            ? <motion.span key={`${perfil.nome}${perfil.cor_avatar}`} className="iniciais-botao"
+                           style={{ background: perfil.cor_avatar || undefined }}
+                           initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                           transition={{ type: 'spring', stiffness: 420, damping: 22 }}>
+                {iniciais(perfil.nome)}
+              </motion.span>
+            : <Icone nome="usuario" />}
         </BotaoRedondo>
         <AnimatePresence mode="popLayout">
           {titulo && (

@@ -16,6 +16,7 @@ import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Esqueleto, Odometro, Reticencias, TextoRevelado } from '../ui/Movimento'
 import { AvaliarCorrida } from '../ui/Estrelas'
+import { CarroCategoria } from '../ui/CarroCategoria'
 import { BarraPrazo, usePrazo } from '../ui/Prazo'
 import { TelaChat } from './Chat'
 import { Busca, guardarRecente, lerRecentes, type Campo } from './Busca'
@@ -387,7 +388,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
 
       {fase === 'escolha' && escolha && <PinoCentral movendo={escolha.movendo} tipo={escolha.campo} base={margens.base} />}
 
-      <BarraTopo rumo={rumo} rotuloRumo={fase === 'corrida' ? 'Rumo ao motorista' : 'Rumo ao destino'}
+      <BarraTopo rumo={rumo} rotuloRumo={fase === 'corrida' ? 'Rumo ao motorista' : 'Rumo ao destino'} perfil={perfil}
                  titulo={titulo} buscando={fase === 'procurando'}
                  menu={(fechar) => (
                    <>
@@ -714,9 +715,8 @@ function CartaoCategoria({ opcao, selecionada, segundos, eta, escolher }: {
                    onClick={escolher} whileTap={{ scale: 0.98 }}
                    variants={{ o: { opacity: 0, y: 14 }, v: { opacity: 1, y: 0 } }}>
       <span className="categoria-carro" aria-hidden="true">
-        {opcao.lugares > 4 && <span className="carro-extra"><Icone nome="carro" tamanho={34} traco={1.6} /></span>}
-        <motion.span animate={{ scale: selecionada ? 1.12 : 1 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
-          <Icone nome="carro" tamanho={38} traco={opcao.id === 'conforto' ? 2 : 1.6} />
+        <motion.span animate={{ scale: selecionada ? 1.1 : 1, x: selecionada ? 2 : 0 }} transition={{ type: 'spring', stiffness: 400, damping: 18 }}>
+          <CarroCategoria categoria={opcao.id} />
         </motion.span>
       </span>
       <span className="categoria-textos">

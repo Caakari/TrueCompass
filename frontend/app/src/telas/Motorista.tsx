@@ -323,7 +323,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
         )}
       </AnimatePresence>
 
-      <BarraTopo rumo={rumo} rotuloRumo={indoAoDestino ? 'Rumo ao destino' : 'Rumo ao passageiro'} titulo={titulo}
+      <BarraTopo rumo={rumo} rotuloRumo={indoAoDestino ? 'Rumo ao destino' : 'Rumo ao passageiro'} titulo={titulo} perfil={perfil}
                  menu={(fechar) => (
                    <>
                      <CabecaMenu icone="carro" papel="Motorista" perfil={perfil} detalhe={online ? 'disponível para corridas' : 'offline'} />

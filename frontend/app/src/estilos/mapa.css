@@ -152,3 +152,11 @@
 .menu-cabeca .avatar.com-cor { background: var(--verde); color: #fff; }
 .menu-cabeca-textos { min-width: 0; }
 .menu-cabeca-textos b, .menu-cabeca-textos small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Botão da conta com as iniciais: o círculo colorido preenche o botão, e o
+   anel do botão (verde quando o menu está aberto) fica em volta. */
+.botao-redondo.com-iniciais { padding: 3px; }
+.iniciais-botao {
+  width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
+  background: var(--verde); color: #fff; font: 700 15px 'Space Grotesk', sans-serif; letter-spacing: .02em;
+}
+.botao-redondo.com-iniciais.ativo { background: var(--verde); }
