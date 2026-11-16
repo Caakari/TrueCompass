@@ -267,7 +267,9 @@ Decisões do front-end:
 
 - O fluxo segue o dos apps de corrida (estilo Uber), com a identidade do
   TrueCompass: tela inicial é UMA pergunta ("Para onde?") + recentes; a prévia
-  é a escolha de **categoria** (Econômico ×1,00 · Conforto ×1,35 · Grande ×1,60,
+  é a escolha de **categoria** (Essencial ×1,00 · Conforto ×1,35 · Premium ×1,60 —
+  nomes que sobem com o conforto; as chaves `economico`/`conforto`/`grande`
+  continuam, pois estão gravadas nas corridas,
   em `dominio/servicos/corrida.py`, `CATEGORIAS`) com botão fixo na base e a
   folha limitada a 68% da tela para a rota caber no mapa.
 - O multiplicador da categoria incide sobre a tarifa inteira; a rota é a mesma.

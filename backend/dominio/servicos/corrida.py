@@ -27,13 +27,16 @@ POR_KM = 1.90
 # motorista atende todas as categorias -- por isso o tempo de chegada do
 # motorista e o mesmo nos tres cartoes, e isso e dito, nao escondido.
 CATEGORIA_PADRAO = "economico"
+# Os nomes sobem com o conforto (Essencial < Conforto < Premium). As CHAVES
+# ficam como estavam: sao elas que estao gravadas em corridas.categoria, e
+# trocar a chave apagaria a categoria das corridas antigas no historico.
 CATEGORIAS = {
-    "economico": {"nome": "Econômico", "lugares": 4, "fator": 1.00,
-                  "descricao": "Viagens do dia a dia"},
+    "economico": {"nome": "Essencial", "lugares": 4, "fator": 1.00,
+                  "descricao": "Viagens do dia a dia, preço justo"},
     "conforto": {"nome": "Conforto", "lugares": 4, "fator": 1.35,
-                 "descricao": "Carros mais novos e espaçosos"},
-    "grande": {"nome": "Grande", "lugares": 6, "fator": 1.60,
-               "descricao": "Para grupos, até 6 pessoas"},
+                 "descricao": "Carros mais novos, ar e espaço extra"},
+    "grande": {"nome": "Premium", "lugares": 6, "fator": 1.60,
+               "descricao": "O mais confortável, até 6 pessoas"},
 }
 
 

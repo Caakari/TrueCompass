@@ -9,7 +9,7 @@ import { Icone } from '../ui/Icone'
 import { Botao, Esqueleto } from '../ui/Movimento'
 import { Painel } from './Perfil'
 
-export const NOME_CATEGORIA: Record<IdCategoria, string> = { economico: 'Econômico', conforto: 'Conforto', grande: 'Grande' }
+export const NOME_CATEGORIA: Record<IdCategoria, string> = { economico: 'Essencial', conforto: 'Conforto', grande: 'Premium' }
 export const PAGAMENTOS: { id: FormaPagamento; nome: string; icone: string }[] = [
   { id: 'pix', nome: 'Pix', icone: 'raio' },
   { id: 'cartao', nome: 'Cartão', icone: 'chip' },

@@ -3,8 +3,8 @@ import type { IdCategoria } from '../tipos'
 
 /**
  * Ilustração de perfil de cada categoria, no lugar do mesmo ícone repetido.
- * A escala sobe com o preço: Econômico é um hatch compacto e simples,
- * Conforto um sedã grafite com friso cromado e rodas de liga, Grande um SUV
+ * A escala sobe com o preço: Essencial é um hatch compacto e simples,
+ * Conforto um sedã grafite com friso cromado e rodas de liga, Premium um SUV
  * alto, de três janelas e rack no teto. Todos no MESMO viewBox, então o
  * tamanho relativo entre eles é real (o hatch ocupa menos largura).
  *
@@ -54,7 +54,7 @@ function Roda({ x, y, r, liga }: { x: number; y: number; r: number; liga: boolea
   )
 }
 
-/** Econômico: hatch compacto, prata claro, calota simples. */
+/** Essencial: hatch compacto, prata claro, calota simples. */
 function Hatch({ id }: { id: string }) {
   return (
     <g>
@@ -93,7 +93,7 @@ function Seda({ id }: { id: string }) {
   )
 }
 
-/** Grande: SUV alto, três janelas, rack no teto, rodas maiores. */
+/** Premium: SUV alto, três janelas, rack no teto, rodas maiores. */
 function Suv({ id }: { id: string }) {
   return (
     <g>

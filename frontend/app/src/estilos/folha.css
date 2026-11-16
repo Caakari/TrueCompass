@@ -210,7 +210,7 @@
 .categoria-nome { display: flex; align-items: center; gap: 8px; font: 700 16.5px 'Space Grotesk', sans-serif; }
 .categoria-lugares { display: inline-flex; align-items: center; gap: 2px; font: 500 12.5px 'Inter', sans-serif; color: var(--texto-dim); }
 .categoria-chegada { font-size: 13px; color: var(--texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.categoria-descricao { font-size: 12px; color: var(--texto-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.categoria-descricao { font-size: 12px; line-height: 1.35; color: var(--texto-dim); }  /* quebra linha: cortada, a descrição perdia o que diferencia a categoria */
 .categoria-preco { font: 700 17px 'Space Grotesk', sans-serif; white-space: nowrap; }
 .categoria.selecionada .categoria-preco { font-size: 18px; }
 .nota-categorias { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--texto-dim); padding: 0 4px; }
