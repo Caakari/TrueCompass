@@ -257,9 +257,15 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
 
     // Padrão: vetorial. Carregado sob demanda (o MapLibre é grande e só o
     // mapa precisa dele); qualquer falha antes do 'load' cai no raster.
-    Promise.all([import('maplibre-gl'), import('@maplibre/maplibre-gl-leaflet'), import('maplibre-gl/dist/maplibre-gl.css')])
-      .then(([, { maplibreGL }]) => {
+    Promise.all([import('maplibre-gl'), import('@maplibre/maplibre-gl-leaflet'),
+                 import('maplibre-gl/dist/maplibre-gl.css'), import('maplibre-gl/dist/maplibre-gl-worker.mjs?url')])
+      .then(([maplibre, { maplibreGL }, , { default: urlDoWorker }]) => {
         if (!vivo) return
+        // O MapLibre procura o worker AO LADO do próprio arquivo, e nem o
+        // build nem o servidor de desenvolvimento do Vite o copiam para lá:
+        // sem isto o vetorial falhava SEMPRE ("Worker failed to load") e o
+        // mapa caía no raster. Com `?url`, o Vite publica o worker e dá o endereço.
+        maplibre.setWorkerUrl(urlDoWorker)
         const vetorial = maplibreGL({ style: ESTILO_VETORIAL[tema], attributionControl: { customAttribution: ATRIBUICAO_VETORIAL }, interactive: false })
         camada = vetorial.addTo(mapa)
         const gl = vetorial.getMaplibreMap()
