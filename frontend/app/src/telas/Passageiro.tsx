@@ -8,7 +8,7 @@ import {
 } from '../lib/util'
 import { Mapa, type ApiMapa, type Onda } from '../mapa/Mapa'
 import type {
-  Corrida, EstadoCorrida, Estimativa, FormaPagamento, IdCategoria, LatLon, LocalSalvo, Lugar, Malha, OpcaoViagem, Ponto,
+  Corrida, EstadoCorrida, Estimativa, FormaPagamento, IdCategoria, LatLon, LocalSalvo, Lugar, Malha, OpcaoViagem, Perfil, Ponto,
   Rota, Semaforo, Sessao, Tema, TipoLocal,
 } from '../tipos'
 import { Bussola } from '../ui/Bussola'
@@ -87,7 +87,10 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [locais, definirLocais] = useState<LocalSalvo[]>([])
   const [definindoLocal, definirDefinindoLocal] = useState<TipoLocal | null>(null)
 
+  const [perfil, definirPerfil] = useState<Perfil | null>(null)
+
   useEffect(() => { api.locais(token).then(definirLocais).catch(() => {}) }, [token])
+  useEffect(() => { api.perfil(token).then(definirPerfil).catch(() => {}) }, [token])
   useEffect(() => { gravarArmazenado(CHAVE_PAGAMENTO, formaPagamento) }, [formaPagamento])
 
   function irParaLocal(local: LocalSalvo) {
@@ -388,7 +391,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
                  titulo={titulo} buscando={fase === 'procurando'}
                  menu={(fechar) => (
                    <>
-                     <CabecaMenu icone="usuario" titulo="Passageiro" detalhe={`${malha.nos.toLocaleString('pt-BR')} cruzamentos reais`} />
+                     <CabecaMenu icone="usuario" papel="Passageiro" perfil={perfil} detalhe={`${malha.nos.toLocaleString('pt-BR')} cruzamentos`} />
                      <ItemMenu icone="usuario" onClick={() => { fechar(); definirPainel('perfil') }}>Perfil e locais salvos</ItemMenu>
                      <ItemMenu icone="relogio" onClick={() => { fechar(); definirPainel('historico') }}>Suas viagens</ItemMenu>
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
@@ -466,7 +469,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
         )}
         {painel === 'perfil' && (
           <TelaPerfil key="perfil" token={token} perto={gps.posicao} aoFechar={() => definirPainel(null)}
-                      aoMudar={(_p, lista) => definirLocais(lista)} />
+                      aoMudar={(p, lista) => { if (p) definirPerfil(p); definirLocais(lista) }} />
         )}
         {painel === 'historico' && <TelaHistorico key="historico" token={token} tipo="passageiro" aoFechar={() => definirPainel(null)} />}
         {definindoParada && (

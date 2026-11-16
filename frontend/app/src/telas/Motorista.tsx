@@ -4,7 +4,7 @@ import { api, type AcaoCorrida } from '../api'
 import { useCorridaAoVivo, useLocalizacao } from '../ganchos'
 import { dentroDaCaixa, paraPonto, reais, rumoVerdadeiro, textoDuracao, vibrar } from '../lib/util'
 import { Mapa, type ApiMapa } from '../mapa/Mapa'
-import type { Corrida, EstadoCorrida, LatLon, Lugar, Malha, Ponto, ResumoMotorista, Rota, Semaforo, Sessao, Tema } from '../tipos'
+import type { Corrida, EstadoCorrida, LatLon, Lugar, Malha, Perfil, Ponto, ResumoMotorista, Rota, Semaforo, Sessao, Tema } from '../tipos'
 import { Aviso, Folha, type Margens } from '../ui/Folha'
 import { Icone } from '../ui/Icone'
 import { Botao, BotaoRedondo, Confete, Odometro, TextoRevelado } from '../ui/Movimento'
@@ -62,6 +62,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [resumo, definirResumo] = useState<ResumoMotorista | null>(null)
   const [painel, definirPainel] = useState<'perfil' | 'historico' | 'chat' | null>(null)
   const [naoLidas, definirNaoLidas] = useState(0)
+  const [perfil, definirPerfil] = useState<Perfil | null>(null)
   const [confete, definirConfete] = useState<{ x: number; y: number } | null>(null)
   const cronometro = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const ultimaSimulada = useRef<Ponto | null>(null)
@@ -69,6 +70,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
   corridaIdRef.current = corridaId
 
   const aoVivo = useCorridaAoVivo(corridaId, token)
+  useEffect(() => { api.perfil(token).then(definirPerfil).catch(() => {}) }, [token])
 
   // Mensagem nova do passageiro com o chat fechado: conta como não lida.
   useEffect(() => {
@@ -324,7 +326,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
       <BarraTopo rumo={rumo} rotuloRumo={indoAoDestino ? 'Rumo ao destino' : 'Rumo ao passageiro'} titulo={titulo}
                  menu={(fechar) => (
                    <>
-                     <CabecaMenu icone="carro" titulo="Motorista" detalhe={online ? 'disponível para corridas' : 'offline'} />
+                     <CabecaMenu icone="carro" papel="Motorista" perfil={perfil} detalhe={online ? 'disponível para corridas' : 'offline'} />
                      <ItemMenu icone="usuario" onClick={() => { fechar(); definirPainel('perfil') }}>Perfil e carro</ItemMenu>
                      <ItemMenu icone="relogio" onClick={() => { fechar(); definirPainel('historico') }}>Suas corridas</ItemMenu>
                      <ItemMenu icone={tema === 'escuro' ? 'sol' : 'lua'} onClick={alternarTema}>Tema {tema === 'escuro' ? 'claro' : 'escuro'}</ItemMenu>
@@ -407,7 +409,8 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
       </AnimatePresence>
 
       <AnimatePresence>
-        {painel === 'perfil' && <TelaPerfil key="perfil" token={token} perto={posicao ?? gps.posicao} aoFechar={() => definirPainel(null)} />}
+        {painel === 'perfil' && <TelaPerfil key="perfil" token={token} perto={posicao ?? gps.posicao} aoFechar={() => definirPainel(null)}
+                                                aoMudar={(p) => { if (p) definirPerfil(p) }} />}
         {painel === 'historico' && <TelaHistorico key="historico" token={token} tipo="motorista" aoFechar={() => definirPainel(null)} />}
         {painel === 'chat' && corrida && corridaId && (
           <TelaChat key="chat" token={token} corridaId={corridaId} euId={sessao.usuario_id} papel="motorista"

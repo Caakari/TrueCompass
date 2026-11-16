@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useState, type ReactNode } from 'react'
 import { milhar, pontoCardinal, vibrar } from '../lib/util'
-import type { Corrida, EstadoCorrida, Estimativa } from '../tipos'
+import type { Corrida, EstadoCorrida, Estimativa, Perfil } from '../tipos'
 import { Bussola } from '../ui/Bussola'
 import { NotaMedia } from '../ui/Estrelas'
 import { Icone } from '../ui/Icone'
 import { BotaoRedondo, NumeroDeslizante } from '../ui/Movimento'
+import { iniciais } from './Perfil'
 
 // ============================================================ barra superior
 
@@ -92,11 +93,23 @@ export function ItemMenu({ icone, children, onClick, perigo = false, valor }: {
   )
 }
 
-export function CabecaMenu({ icone, titulo, detalhe }: { icone: string; titulo: string; detalhe: string }) {
+/**
+ * Cabeçalho do menu da conta: o NOME de quem está logado, com as iniciais na
+ * cor escolhida no perfil. Enquanto o perfil não chega, mostra o papel
+ * (Passageiro/Motorista) com o ícone, sem piscar um nome vazio.
+ */
+export function CabecaMenu({ icone, papel, detalhe, perfil }: {
+  icone: string; papel: string; detalhe: string; perfil: Perfil | null
+}) {
   return (
     <motion.div variants={itemVariante} className="menu-cabeca">
-      <span className="avatar"><Icone nome={icone} /></span>
-      <div><b>{titulo}</b><small>{detalhe}</small></div>
+      {perfil
+        ? <span className="avatar com-cor" style={{ background: perfil.cor_avatar || undefined }}>{iniciais(perfil.nome)}</span>
+        : <span className="avatar"><Icone nome={icone} /></span>}
+      <div className="menu-cabeca-textos">
+        <b>{perfil?.nome ?? papel}</b>
+        <small>{perfil ? `${papel} · ${detalhe}` : detalhe}</small>
+      </div>
     </motion.div>
   )
 }

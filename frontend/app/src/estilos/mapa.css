@@ -148,3 +148,7 @@
   font: 700 11.5px 'Space Grotesk', sans-serif; box-shadow: 0 6px 12px -4px rgba(0,0,0,.5);
   animation: pousar .6s var(--curva) both;
 }
+/* Iniciais na cor do perfil (a mesma do avatar na tela de perfil). */
+.menu-cabeca .avatar.com-cor { background: var(--verde); color: #fff; }
+.menu-cabeca-textos { min-width: 0; }
+.menu-cabeca-textos b, .menu-cabeca-textos small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
