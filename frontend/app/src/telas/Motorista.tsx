@@ -308,6 +308,7 @@ export function Motorista({ sessao, malha, tema, alternarTema, sair }: Props) {
             rota={indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
             rotaMotorista={!indoAoDestino && trajeto ? trajeto.pontos : VAZIO}
             cometa={indoAoDestino}
+            sinaisRota={trajeto?.semaforos ?? VAZIO}
             semaforos={mostrarMalha ? malha.semaforos : SEM_SEMAFOROS}
             mostrarMalha={mostrarMalha || semTiles}
             margens={margens}

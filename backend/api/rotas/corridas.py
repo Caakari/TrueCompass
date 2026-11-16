@@ -14,7 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.deps import (config, obter_alt, obter_conexoes, obter_geometria, obter_grafo,
-                      obter_indice_nos, obter_registro, usuario_atual)
+                      obter_indice_nos, obter_nos_semaforizados, obter_registro, usuario_atual)
 from api.esquemas import (AvaliacaoEntrada, CorridaEntrada, CorridaSaida, HistoricoItem,
                           MensagemEntrada, MensagemSaida, ParadaSaida, RotaSaida)
 from api.eventos import comitar_e_publicar, mensagem_chat
@@ -165,7 +165,8 @@ def consultar(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
 @rotas.get("/{corrida_id}/rota", response_model=RotaSaida)
 def obter_rota(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
                sessao: Session = Depends(obter_sessao), grafo=Depends(obter_grafo),
-               alt=Depends(obter_alt), geometria=Depends(obter_geometria)):
+               alt=Depends(obter_alt), geometria=Depends(obter_geometria),
+               semaforos=Depends(obter_nos_semaforizados)):
     """Traçado para o Leaflet desenhar: A* trecho a trecho, pelas paradas."""
     corrida = _carregar(sessao, corrida_id, usuario)
     nos = [corrida.no_origem, *(p.no for p in paradas_da_corrida(sessao, corrida.id)),
@@ -176,7 +177,8 @@ def obter_rota(corrida_id: int, usuario: Usuario = Depends(usuario_atual),
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(erro))
     return RotaSaida(segundos=segundos,
                      metros=servico.comprimento_metros(grafo, caminho, geometria),
-                     pontos=servico.tracado(grafo, caminho, geometria))
+                     pontos=servico.tracado(grafo, caminho, geometria),
+                     semaforos=servico.semaforos_do_caminho(grafo, caminho, semaforos))
 
 
 @rotas.get("/{corrida_id}/rota-motorista", response_model=RotaSaida)
@@ -185,7 +187,8 @@ def obter_rota_do_motorista(corrida_id: int,
                             sessao: Session = Depends(obter_sessao),
                             grafo=Depends(obter_grafo),
                             alt=Depends(obter_alt),
-                            geometria=Depends(obter_geometria)):
+                            geometria=Depends(obter_geometria),
+                            semaforos=Depends(obter_nos_semaforizados)):
     """Trajeto do motorista ate o passageiro, sobre as ruas.
 
     Alvo unico, portanto A* com heuristica. Calculado sob demanda a partir da
@@ -208,7 +211,8 @@ def obter_rota_do_motorista(corrida_id: int,
 
     return RotaSaida(segundos=segundos,
                      metros=servico.comprimento_metros(grafo, caminho, geometria),
-                     pontos=servico.tracado(grafo, caminho, geometria))
+                     pontos=servico.tracado(grafo, caminho, geometria),
+                     semaforos=servico.semaforos_do_caminho(grafo, caminho, semaforos))
 
 
 @rotas.post("/{corrida_id}/iniciar", response_model=CorridaSaida)

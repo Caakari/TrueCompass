@@ -119,7 +119,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
 - `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (80), `test_ws.py` (16), `test_migracoes.py` (6)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (6)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -281,6 +281,17 @@ Decisões do front-end:
 - Mapa limpo: tiles em **tons de cinza**, sem semáforos e sem malha por padrão
   (opção "Malha e semáforos" no menu). A única coisa colorida é a rota. Se os
   tiles falharem, a malha volta como fundo, mas sem os semáforos.
+- **Semáforos da rota** aparecem sempre, com o ícone de semáforo de pé (três
+  luzes, vermelho aceso, ponta no cruzamento) — só os do CAMINHO, para o mapa
+  continuar limpo. As posições vêm do backend (`semaforos_rota` na estimativa,
+  `semaforos` nas duas rotas da corrida), do MESMO teste de pertinência que
+  `semaforos_no_caminho` conta: desenho e contagem não divergem. De longe,
+  ícones a menos de 20 px viram um só. O SVG do ícone não usa gradiente com
+  `id`: repetido em vários marcadores, um id duplicado quebra quando o
+  primeiro marcador sai. Os nomes das ruas vêm dos tiles do OSM, que ficam.
+- A cidade sintética dos testes não tem semáforos: teste de semáforo **planta**
+  sinais na rota (`semaforos_plantados`) e exige que apareçam — sem isso o
+  teste passaria vazio.
 - Cartão do motorista mostra **corridas concluídas** (`motorista_corridas`), dado
   real, no lugar de uma nota que o protótipo não coleta.
 - Painel do motorista: botão redondo Iniciar/Pausar e ganhos do dia

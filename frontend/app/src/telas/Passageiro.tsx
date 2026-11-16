@@ -66,6 +66,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
   const [procurando, definirProcurando] = useState(false)
   const [semMotorista, definirSemMotorista] = useState(false)
   const [rotaCorrida, definirRotaCorrida] = useState<LatLon[]>(VAZIO)
+  const [sinaisCorrida, definirSinaisCorrida] = useState<LatLon[]>(VAZIO)
   const [rotaMotorista, definirRotaMotorista] = useState<Rota | null>(null)
   const [erro, definirErro] = useState<string | null>(null)
   const [ocupado, definirOcupado] = useState(false)
@@ -144,7 +145,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
     api.consultarCorrida(token, salvo.corridaId).then((c) => {
       if (FINAIS.includes(c.estado)) { gravarArmazenado(CHAVE_CORRIDA, null); return }
       definirCorrida(c)
-      api.rotaDaCorrida(token, c.id).then((r) => definirRotaCorrida(r.pontos)).catch(() => {})
+      api.rotaDaCorrida(token, c.id).then((r) => { definirRotaCorrida(r.pontos); definirSinaisCorrida(r.semaforos ?? VAZIO) }).catch(() => {})
     }).catch(() => gravarArmazenado(CHAVE_CORRIDA, null))
   }, [])
 
@@ -251,6 +252,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
       if (resta > 0) await esperar(resta)
       guardarRecente(destino)
       definirRotaCorrida(estimativa?.pontos ?? VAZIO)
+      definirSinaisCorrida(estimativa?.semaforos_rota ?? VAZIO)
       definirCorrida(nova)
       vibrar([20, 60, 20, 60, 40])
     } catch (falha) {
@@ -280,7 +282,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
     definirParadas([]); definirNaoLidas(0)
     definirCategoria('economico')
     definirCorrida(null); definirDestino(null); definirEstimativa(null); definirOnda(null)
-    definirRotaCorrida(VAZIO); definirRotaMotorista(null); definirErro(null); definirConfete(null)
+    definirRotaCorrida(VAZIO); definirSinaisCorrida(VAZIO); definirRotaMotorista(null); definirErro(null); definirConfete(null)
     gravarArmazenado(CHAVE_CORRIDA, null)
     if (gpsNaArea) usarGpsComo('origem')
   }
@@ -345,6 +347,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
 
   // ---- o que o mapa mostra em cada fase
   const rotaExibida = corrida ? rotaCorrida : fase === 'previa' && estimativa ? estimativa.pontos : VAZIO
+  const sinaisExibidos = corrida ? sinaisCorrida : fase === 'previa' && estimativa ? estimativa.semaforos_rota ?? VAZIO : VAZIO
   const conectores = useMemo(() => {
     // Trecho a pé entre o endereço e o cruzamento onde a rota começa/termina.
     if (rotaExibida.length < 2 || !origem || !destino) return undefined
@@ -375,6 +378,7 @@ export function Passageiro({ sessao, malha, tema, alternarTema, sair }: Props) {
             motorista={fase === 'corrida' ? aoVivo.posicaoMotorista ?? motoristaEm : null}
             radar={fase === 'procurando' ? origem : null}
             rota={rotaExibida}
+            sinaisRota={sinaisExibidos}
             rotaMotorista={fase === 'corrida' && rotaMotorista ? rotaMotorista.pontos : VAZIO}
             conectores={conectores}
             semaforos={mostrarMalha ? malha.semaforos : SEM_SEMAFOROS}

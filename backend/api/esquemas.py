@@ -107,6 +107,7 @@ class RotaSaida(BaseModel):
     segundos: float
     metros: float
     pontos: list[tuple[float, float]]      # [lat, lon] para o Leaflet desenhar
+    semaforos: list[tuple[float, float]] = []   # sinais do caminho, na ordem
 
 
 # ------------------------------------------------------------------ perfil

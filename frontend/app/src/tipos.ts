@@ -79,6 +79,8 @@ export interface Estimativa {
   paradas: Ponto[]
   pontos: LatLon[]
   semaforos_no_caminho: number
+  /** Posição de cada semáforo do caminho, na ordem do trajeto. */
+  semaforos_rota?: LatLon[]
   ancoragem_m: { origem: number; destino: number }
   algoritmo: {
     a_estrela: ResultadoAlgoritmo
@@ -136,7 +138,7 @@ export interface Corrida {
   destino: LatLon | null
 }
 
-export interface Rota { segundos: number; metros: number; pontos: LatLon[] }
+export interface Rota { segundos: number; metros: number; pontos: LatLon[]; semaforos?: LatLon[] }
 
 export interface Parada extends Ponto { texto: string | null }
 

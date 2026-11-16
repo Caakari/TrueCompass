@@ -177,6 +177,17 @@ def _passo_da_soma(totais, maximo=MAXIMO_PONTOS_EXPLORACAO):
     return max(1, -(-maior // maximo))
 
 
+def semaforos_do_caminho(grafo, caminho, semaforos):
+    """(lat, lon) de cada semaforo do caminho, NA ORDEM do trajeto.
+
+    E o que o mapa desenha sobre a rota. Sai do mesmo teste de pertinencia
+    que `semaforos_no_caminho` conta, entao o desenho e a contagem nunca
+    divergem. Semaforos nunca sao contraidos: todo sinal da rua esta no
+    caminho como no.
+    """
+    return [grafo.coordenadas(no) for no in caminho if no in semaforos]
+
+
 def estimar_viagem(grafo, indice_nos, origem, destino, *, paradas=(), registro=None,
                    config=None, semaforos=frozenset(), comparar=False,
                    explorar=False, geometria=None, alt=None):
@@ -226,6 +237,7 @@ def estimar_viagem(grafo, indice_nos, origem, destino, *, paradas=(), registro=N
         "categorias": opcoes_de_viagem(segundos, metros),
         "pontos": pontos,
         "semaforos_no_caminho": sum(1 for no in caminho if no in semaforos),
+        "semaforos_rota": semaforos_do_caminho(grafo, caminho, semaforos),
         # Quanto o endereco esta do cruzamento onde a rota comeca/termina:
         # o front desenha esse trecho a pe, tracejado.
         "ancoragem_m": {

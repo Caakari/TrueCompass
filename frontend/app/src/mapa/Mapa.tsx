@@ -54,6 +54,8 @@ interface Props {
   rotaMotorista?: LatLon[]
   conectores?: LatLon[][]
   semaforos?: Semaforo[]
+  /** Semáforos da rota exibida: desenhados com o ícone de semáforo. */
+  sinaisRota?: LatLon[]
   onda?: Onda | null
   cometa?: boolean
   mostrarMalha?: boolean
@@ -80,6 +82,19 @@ const ICONES = {
   destino: () => icone('<div class="pino-destino"><span></span></div>', [30, 40], [15, 38]),
   parada: (n: number) => icone(`<div class="pino-parada">${n}</div>`, [24, 24], [12, 12]),
   usuario: () => icone('<div class="ponto-usuario"></div>', [20, 20], [10, 10]),
+  // Semáforo de pé, com as três luzes e o vermelho aceso; a ponta embaixo
+  // marca o cruzamento. Sem gradiente com id: o mesmo SVG se repete em
+  // vários marcadores, e um id duplicado quebra quando o primeiro sai.
+  sinal: () => icone(`<div class="sinal-rota"><svg viewBox="-10 -36 20 38" width="18" height="34" aria-hidden="true">
+      <path d="M0 0 L-3.2 -6.2 L3.2 -6.2 Z" class="sinal-ponta"/>
+      <rect x="-7.5" y="-34.5" width="15" height="29.5" rx="5.6" class="sinal-caixa"/>
+      <circle cy="-27.6" r="5.4" class="sinal-halo"/>
+      <circle cy="-27.6" r="3.3" class="sinal-vermelho"/>
+      <circle cy="-19.6" r="3.3" class="sinal-amarelo"/>
+      <circle cy="-11.6" r="3.3" class="sinal-verde"/>
+      <path d="M-4.2 -30.2 Q0 -33.2 4.2 -30.2 M-4.2 -22.2 Q0 -25.2 4.2 -22.2 M-4.2 -14.2 Q0 -17.2 4.2 -14.2" class="sinal-viseira"/>
+      <circle cx="-1.1" cy="-28.9" r=".95" class="sinal-reflexo"/>
+    </svg></div>`, [18, 34], [9, 32], 'marcador-sinal'),
   radar: () => icone('<div class="radar"><b></b><i></i><i></i><i></i></div>', [280, 280], [140, 140], 'marcador-radar'),
   carro: () => icone(`<div class="carro"><svg viewBox="0 0 40 40" width="40" height="40">
       <ellipse cx="20" cy="21" rx="10" ry="16" class="carro-sombra"/>
@@ -94,7 +109,7 @@ const ICONES = {
 export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
   const {
     tema, centro, usuario, origem, destino, paradas = SEM_PARADAS, motorista, radar,
-    rota = VAZIO, rotaMotorista = VAZIO, conectores, semaforos = [],
+    rota = VAZIO, rotaMotorista = VAZIO, conectores, semaforos = [], sinaisRota = VAZIO,
     onda = null, cometa = false, mostrarMalha = false,
   } = props
   const divRef = useRef<HTMLDivElement>(null)
@@ -158,6 +173,7 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
       malhaDupla: L.polyline([], { renderer: canvas, weight: 1.5, ...semInteracao }),
       malhaUnica: L.polyline([], { renderer: canvas, weight: 1.5, dashArray: '4,4', ...semInteracao }),
       semaforos: L.layerGroup(),
+      sinaisRota: L.layerGroup().addTo(mapa),
       conectores: L.polyline([], { weight: 3, dashArray: '1,7', lineCap: 'round', className: 'conector', ...semInteracao }).addTo(mapa),
       rastro: L.polyline([], { weight: 6, lineCap: 'round', className: 'rastro', ...semInteracao }).addTo(mapa),
       rotaMotoristaContorno: L.polyline([], { weight: 8, className: 'rota-motorista-contorno', ...semInteracao }).addTo(mapa),
@@ -268,6 +284,22 @@ export const Mapa = forwardRef<ApiMapa, Props>(function Mapa(props, ref) {
     if (zoom >= ZOOM_SEMAFOROS) grupo.addTo(mapa)
     else mapa.removeLayer(grupo)
   }, [zoom])
+
+  // ------------------------------- semáforos da rota (o ícone, sempre visível)
+  // Só os do caminho: o mapa continua limpo. De longe, sinais a menos de
+  // 20 px um do outro viram UM ícone, senão a avenida vira uma pilha.
+  useEffect(() => {
+    const mapa = mapaRef.current, grupo = camadasRef.current.sinaisRota as L.LayerGroup
+    if (!mapa || !grupo) return
+    grupo.clearLayers()
+    const z = mapa.getZoom(), postos: L.Point[] = []
+    for (const p of sinaisRota) {
+      const px = mapa.project(p, z)
+      if (postos.some((q) => q.distanceTo(px) < 20)) continue
+      postos.push(px)
+      L.marker(p, { icon: ICONES.sinal(), interactive: false, keyboard: false, zIndexOffset: -200 }).addTo(grupo)
+    }
+  }, [sinaisRota, zoom])
 
   // --------------------------------------------- rota: enquadra, onda, traço
   const ondaAtualRef = useRef<string | null>(null)

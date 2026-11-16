@@ -160,3 +160,20 @@
   background: var(--verde); color: #fff; font: 700 15px 'Space Grotesk', sans-serif; letter-spacing: .02em;
 }
 .botao-redondo.com-iniciais.ativo { background: var(--verde); }
+
+/* Semáforo da rota: caixa escura com borda branca, vermelho aceso com
+   halo, pestanas sobre as luzes. A sombra no div (drop-shadow) funciona em
+   todo navegador; o desfoque do halo é um extra onde houver suporte. */
+.marcador-sinal { background: none; border: 0; }
+.sinal-rota { filter: drop-shadow(0 1.5px 1.6px rgba(0, 0, 0, .38)); }
+.sinal-rota svg { display: block; overflow: visible; }
+.sinal-ponta { fill: #16191D; }
+.sinal-caixa { fill: #262B31; stroke: #fff; stroke-width: 1.7; }
+.sinal-halo { fill: #FF3B3B; opacity: .45; filter: blur(1.6px); }
+.sinal-vermelho { fill: #FF3D3D; }
+.sinal-amarelo { fill: #4E421F; }
+.sinal-verde { fill: #1B4430; }
+.sinal-viseira { fill: none; stroke: #0B0D10; stroke-width: 1.3; stroke-linecap: round; }
+.sinal-reflexo { fill: #fff; opacity: .85; }
+/* No escuro a ponta escura sumiria no fundo. */
+:root[data-tema="escuro"] .sinal-ponta { fill: #E8ECEF; }

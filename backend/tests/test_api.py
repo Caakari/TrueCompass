@@ -7,6 +7,7 @@ percorre o fluxo inteiro, inclusive as tentativas que o DAG deve recusar.
 """
 
 import os
+from contextlib import contextmanager
 import sys
 import tempfile
 
@@ -474,6 +475,56 @@ def test_amostragem_comum_preserva_a_proporcao_entre_as_buscas():
 
 def test_exploracao_e_opcional():
     assert "exploracao" not in estimar(novo_passageiro()).json()
+
+
+@contextmanager
+def semaforos_plantados(token):
+    """A cidade sintetica dos testes nao tem semaforos: planta um a cada
+    tres cruzamentos da rota ORIGEM -> DESTINO, e devolve quantos."""
+    estado = aplicacao.state
+    pontos = estimar(token).json()["pontos"]
+    nos = {estado.indice_nos.mais_proximo(lat, lon) for lat, lon in pontos[1:-1:3]}
+    antes = estado.nos_semaforizados
+    estado.nos_semaforizados = frozenset(nos)
+    try:
+        yield len(nos)
+    finally:
+        estado.nos_semaforizados = antes
+
+
+def test_semaforos_da_rota_casam_com_a_contagem():
+    """O mapa desenha um semaforo por posicao devolvida, e a folha mostra a
+    contagem: as duas saem do MESMO caminho e nao podem divergir."""
+    passageiro = novo_passageiro()
+    with semaforos_plantados(passageiro) as plantados:
+        dados = estimar(passageiro).json()
+    sinais = dados["semaforos_rota"]
+    assert len(sinais) == dados["semaforos_no_caminho"] == plantados > 0
+
+
+def test_semaforos_do_caminho_seguem_a_ordem_do_trajeto():
+    from algoritmos.grafo import Grafo
+    from dominio.servicos.corrida import semaforos_do_caminho
+
+    grafo = Grafo()
+    for no, lon in ((1, 0.0), (2, 0.001), (3, 0.002), (4, 0.003)):
+        grafo.adicionar_no(no, -23.5, lon)
+    caminho = [4, 3, 2, 1]                       # percorrido de tras para frente
+    assert semaforos_do_caminho(grafo, caminho, frozenset({1, 3})) == [(-23.5, 0.002), (-23.5, 0.0)]
+    assert semaforos_do_caminho(grafo, caminho, frozenset()) == []
+
+
+def test_rota_da_corrida_traz_os_mesmos_semaforos_da_previa():
+    """Previa e corrida usam a mesma funcao de rota: os sinais desenhados
+    antes de pedir sao os mesmos que aparecem durante a viagem."""
+    passageiro = novo_passageiro()
+    novo_motorista()
+    with semaforos_plantados(passageiro):
+        previa = estimar(passageiro).json()
+        corrida = pedir_corrida(passageiro).json()
+        rota = cliente.get(f"/corridas/{corrida['id']}/rota", headers=cabecalho(passageiro)).json()
+    assert previa["semaforos_rota"], "sem sinal plantado o teste nao provaria nada"
+    assert [list(p) for p in rota["semaforos"]] == [list(p) for p in previa["semaforos_rota"]]
 
 
 def test_estimativa_e_a_mesma_rota_do_pedido():
