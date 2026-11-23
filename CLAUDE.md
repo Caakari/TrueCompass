@@ -1,15 +1,20 @@
 # TrueCompass — instruções do projeto
 
-## Git: commitar apenas no Prototipo-TrueCompass
+## Git: onde commitar
 
-**Commits e push são autorizados**, e apenas para este repositório:
+**Commits e push são autorizados** neste repositório, que é onde o trabalho
+acontece e de onde o Railway e o Vercel publicam:
 
 ```
 https://github.com/Cm-Kauan/Prototipo-TrueCompass.git
 ```
 
-Nenhum outro. `Caakari/TrueCompass` é o repositório antigo do squad, preservado
-somente leitura na prática — **nunca** empurre nada para lá.
+`Caakari/TrueCompass` é o repositório do squad (o QR do banner aponta para
+ele). Desde 23/11/2026 os dois têm o MESMO histórico (merge de `Caakari/main`
+aqui, com a organização atual: `backend/`, `docs/`, `frontend/`). Ele recebe
+as atualizações **só por Pull Request**, a pedido do Kauan, para a Yukari
+revisar — **nunca** push direto na `main` de lá, nem force-push. Nenhum outro
+repositório.
 
 ### Confira o remote antes de todo push
 
