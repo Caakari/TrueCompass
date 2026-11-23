@@ -32,7 +32,8 @@ DADOS = os.path.join(AQUI, "mapa_heroi.json")
 CAPTURAS = os.path.join(AQUI, "capturas")
 FONTES = os.path.join(AQUI, "..", "fontes")
 SAIDA = os.path.join(AQUI, "banner.html")
-REPO = "https://github.com/Cm-Kauan/Prototipo-TrueCompass"
+# QR do rodapé: repositório do squad (pedido do grupo para o banner).
+REPO = "https://github.com/Caakari/TrueCompass"
 
 # ------------------------------------------------------------ medições
 # Medidas na malha da cidade inteira (136.891 cruzamentos), 30 rotas sorteadas

@@ -20,7 +20,7 @@ Resende. Pouco texto, em tópicos, e metade do espaço em recursos visuais
 | Coluna esquerda: Contexto & Problema, Objetivos | 4 tópicos + diagrama "linha reta × pelas ruas"; objetivo geral e 5 específicos |
 | Coluna central: Metodologia / Arquitetura com diagrama | fluxo "do mapa ao grafo", diagrama de camadas e a corrida passo a passo |
 | Coluna direita: Resultados (gráfico, prints, indicadores) | gráfico Dijkstra × A* × A*+ALT, 4 indicadores, 3 telas do app |
-| Considerações finais, 2-3 referências ABNT, QR Code | rodapé; o QR leva ao repositório (conferido decodificando o PDF) |
+| Considerações finais, 2-3 referências ABNT, QR Code | rodapé; o QR leva ao repositório do squad, github.com/Caakari/TrueCompass (conferido decodificando o PDF) |
 | Título 60-80 pt · seções 36-44 pt · texto 24-30 pt · nunca < 20 pt | título 80 · seções 40 · texto 24-27 · legendas e referências 21-22 (medido no documento renderizado; o texto dentro do diagrama tem 22-23 pt) |
 
 ## Gerar de novo
