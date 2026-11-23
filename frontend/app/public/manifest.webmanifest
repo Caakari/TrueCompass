@@ -1,0 +1,14 @@
+{
+  "name": "TrueCompass",
+  "short_name": "TrueCompass",
+  "description": "Corridas urbanas com rota real calculada por A* sobre as ruas de São Paulo.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D0F11",
+  "theme_color": "#0D0F11",
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

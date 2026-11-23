@@ -1,0 +1,179 @@
+/* ============================================================== mapa */
+.tela-app { position: absolute; inset: 0; overflow: hidden; background: var(--mapa-bg); }
+.mapa-palco { position: absolute; inset: 0; }
+.mapa { position: absolute; inset: 0; background: var(--mapa-bg); z-index: 0; }
+.camada-onda { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; transition: opacity .15s; }
+
+.leaflet-container { background: var(--mapa-bg); font-family: 'Inter', sans-serif; outline: none; }
+/* Tiles do OSM em tons de cinza, como os mapas de app de corrida: o fundo
+   só dá contexto, e a única coisa colorida na tela é a rota. No escuro,
+   invertidos (o OSM não tem estilo escuro sem chave de API, e a inversão
+   preserva ruas e rótulos). */
+.tiles-osm { filter: grayscale(1) contrast(.86) brightness(1.08); }
+:root[data-tema="escuro"] .tiles-osm { filter: invert(1) grayscale(1) brightness(.72) contrast(.9); }
+.leaflet-control-attribution {
+  margin-top: calc(var(--seguro-topo) + 132px) !important; margin-right: 8px !important;
+  background: var(--vidro) !important; color: var(--texto-fraco) !important;
+  font-size: 9.5px !important; border-radius: 6px; padding: 1px 6px !important; backdrop-filter: blur(8px);
+}
+.leaflet-control-attribution a { color: var(--texto-dim) !important; }
+.leaflet-tooltip {
+  background: var(--cartao); color: var(--texto); border: 1px solid var(--linha);
+  border-radius: 10px; box-shadow: var(--sombra-suave); font-size: 12px; padding: 6px 9px;
+}
+.leaflet-tooltip-top::before { border-top-color: var(--cartao); }
+.leaflet-tooltip small { color: var(--texto-dim); font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
+
+/* ---- rota: brilho difuso + contorno + linha; some até a onda chegar */
+.rota-brilho { stroke: var(--rota); stroke-linecap: round; stroke-linejoin: round; opacity: .22; filter: blur(5px); transition: opacity .6s; }
+.rota-contorno { stroke: var(--rota-contorno); stroke-linecap: round; stroke-linejoin: round; opacity: .95; transition: opacity .4s; }
+.rota-linha { stroke: var(--rota); stroke-linecap: round; stroke-linejoin: round; transition: opacity .4s; }
+.oculta { opacity: 0 !important; }
+.rota-motorista-contorno { stroke: var(--cartao); stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.rota-motorista { stroke: var(--texto); stroke-linejoin: round; animation: marcha 1s linear infinite; }
+@keyframes marcha { to { stroke-dashoffset: -11; } }
+.conector { stroke: var(--texto-dim); }
+.rastro { stroke: var(--verde); stroke-linecap: round; opacity: .35; filter: blur(2px); }
+
+/* ---- marcadores (divIcon: HTML e CSS puros, nenhum asset) */
+.marcador { background: none !important; border: none !important; }
+@keyframes pousar { 0% { transform: translateY(-60px) scale(.6); opacity: 0; } 60% { transform: translateY(4px) scale(1.08); opacity: 1; } 80% { transform: translateY(-3px); } 100% { transform: none; } }
+@keyframes ondaPino { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(3.2); opacity: 0; } }
+.pino-origem {
+  position: relative; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--verde); border: 4px solid #fff;
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,.25), 0 8px 16px -4px rgba(0,0,0,.6);
+  animation: pousar .6s var(--curva) both;
+}
+.pino-origem i { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--verde); animation: ondaPino 2s ease-out infinite; }
+.pino-origem.grande { width: 30px; height: 30px; border-width: 6px; }
+.pino-destino { width: 30px; height: 40px; position: relative; animation: pousar .65s var(--curva) both; filter: drop-shadow(0 8px 8px rgba(0,0,0,.45)); }
+.pino-destino::before { content: ''; position: absolute; left: 1px; top: 0; width: 28px; height: 28px; background: var(--vermelho); border: 3px solid #fff; border-radius: 8px; }
+.pino-destino::after { content: ''; position: absolute; left: 13.5px; top: 27px; width: 3px; height: 13px; background: #fff; border-radius: 2px; }
+.pino-destino span { position: absolute; left: 11.5px; top: 10.5px; width: 7px; height: 7px; background: #fff; border-radius: 2px; z-index: 1; }
+.ponto-usuario { width: 20px; height: 20px; border-radius: 50%; position: relative; background: #4C8DF6; border: 3.5px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.ponto-usuario::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: #4C8DF6; z-index: -1; animation: ondaPino 2.2s ease-out infinite; }
+
+/* ---- radar do pareamento: varredura cônica + anéis */
+.marcador-radar { pointer-events: none !important; }
+.radar { position: relative; width: 280px; height: 280px; }
+.radar b {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, transparent 280deg, var(--verde-brilho) 355deg, transparent 360deg);
+  animation: girar 2.2s linear infinite;
+  -webkit-mask-image: radial-gradient(circle, #000 0, #000 68%, transparent 70%); mask-image: radial-gradient(circle, #000 0, #000 68%, transparent 70%);
+}
+.radar i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--verde); animation: radarAnel 2.6s cubic-bezier(.2,.6,.35,1) infinite; }
+.radar i:nth-of-type(2) { animation-delay: .87s; }
+.radar i:nth-of-type(3) { animation-delay: 1.74s; }
+@keyframes radarAnel { 0% { transform: scale(.06); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
+
+/* ---- carro: gira no sentido em que anda */
+.carro { width: 40px; height: 40px; transition: transform .6s var(--curva); }
+.carro-sombra { fill: rgba(0,0,0,.35); filter: blur(3px); }
+.carro-corpo { fill: #F5F2E8; stroke: #1A1D20; stroke-width: 1.4; }
+.carro-vidro { fill: #2A3036; }
+.carro-farol { fill: #FFE7A3; filter: drop-shadow(0 -2px 3px #FFE7A3); }
+
+/* ---- onda de choque ao ficar online */
+.choque {
+  position: absolute; z-index: 25; pointer-events: none; left: 50%; top: 50%;
+  width: 260vmax; height: 260vmax; margin: -130vmax 0 0 -130vmax; border-radius: 50%;
+  border: 3px solid var(--verde); box-shadow: 0 0 60px 20px var(--verde-brilho) inset, 0 0 40px var(--verde-brilho);
+}
+
+/* ======================================================= barra superior */
+.barra-topo {
+  position: absolute; z-index: 30; top: 0; left: 0; right: 0;
+  padding: calc(var(--seguro-topo) + 12px) 14px 0;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; pointer-events: none;
+}
+.barra-topo > * { pointer-events: auto; }
+.botao-redondo {
+  width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--linha);
+  background: var(--vidro); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  display: grid; place-items: center; color: var(--texto); box-shadow: var(--sombra-suave);
+  transition: background .25s, color .25s, border-color .25s;
+}
+.botao-redondo.ativo { background: var(--verde); color: var(--verde-sobre); border-color: transparent; box-shadow: 0 8px 22px -8px var(--verde-brilho); }
+.pilula-titulo {
+  margin-top: 6px; padding: 10px 18px; border-radius: 999px;
+  background: var(--vidro); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--linha); box-shadow: var(--sombra-suave);
+  font: 600 14px 'Space Grotesk', sans-serif; white-space: nowrap;
+}
+.bussola-flutuante {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border-radius: 30px;
+  background: var(--vidro); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--linha); box-shadow: var(--sombra-suave); overflow: hidden;
+}
+.bussola-flutuante .bussola { filter: none; }
+.bussola-graus { font-size: 10px; color: var(--texto-dim); padding-bottom: 4px; }
+
+.veu { position: absolute; inset: 0; z-index: 40; background: rgba(0,0,0,.3); backdrop-filter: blur(2px); }
+.menu-conta {
+  position: absolute; z-index: 41; top: calc(var(--seguro-topo) + 68px); left: 14px;
+  width: min(296px, calc(100vw - 28px)); padding: 8px;
+  background: var(--cartao); border: 1px solid var(--linha); border-radius: 20px; box-shadow: var(--sombra);
+}
+.menu-cabeca { display: flex; align-items: center; gap: 11px; padding: 8px 8px 12px; border-bottom: 1px solid var(--linha); margin-bottom: 6px; }
+.menu-cabeca b { display: block; font-size: 15px; }
+.menu-cabeca small { color: var(--texto-dim); font-size: 12px; }
+.avatar {
+  position: relative; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--cartao-alto); color: var(--texto-dim);
+  font: 700 15px 'Space Grotesk', sans-serif;
+}
+.avatar.grande { width: 52px; height: 52px; font-size: 17px; background: var(--verde-dim); color: var(--verde); }
+.avatar-anel { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--verde); border-right-color: transparent; border-bottom-color: transparent; animation: girar 2.4s linear infinite; }
+.item-menu { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 10px; border: 0; border-radius: 12px; background: none; font-size: 15px; text-align: left; }
+.item-menu:hover { background: var(--cartao-alto); }
+.item-menu > span:first-of-type { flex: 1; }
+.item-menu.perigo { color: var(--vermelho); }
+.chave { width: 40px; height: 24px; border-radius: 99px; background: var(--linha-forte); display: flex; align-items: center; padding: 3px; transition: background .25s; flex-shrink: 0; }
+.chave i { width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.25); }
+.chave.ligada { background: var(--verde); justify-content: flex-end; }
+
+.controles-mapa { position: absolute; z-index: 15; right: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+.pino-central { position: absolute; z-index: 20; left: 50%; transform: translateX(-50%); pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+.pino-central .pino-destino, .pino-central .pino-origem { animation: none; }
+.pino-central .pino-origem.grande { margin-bottom: -15px; }
+.pino-sombra { width: 16px; height: 6px; border-radius: 50%; background: #000; filter: blur(2px); margin-top: -1px; }
+
+/* ---- parada no caminho: círculo escuro numerado, entre a origem e o destino */
+.pino-parada {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--texto); color: var(--painel); border: 3px solid #fff;
+  font: 700 11.5px 'Space Grotesk', sans-serif; box-shadow: 0 6px 12px -4px rgba(0,0,0,.5);
+  animation: pousar .6s var(--curva) both;
+}
+/* Iniciais na cor do perfil (a mesma do avatar na tela de perfil). */
+.menu-cabeca .avatar.com-cor { background: var(--verde); color: #fff; }
+.menu-cabeca-textos { min-width: 0; }
+.menu-cabeca-textos b, .menu-cabeca-textos small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Botão da conta com as iniciais: o círculo colorido preenche o botão, e o
+   anel do botão (verde quando o menu está aberto) fica em volta. */
+.botao-redondo.com-iniciais { padding: 3px; }
+.iniciais-botao {
+  width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
+  background: var(--verde); color: #fff; font: 700 15px 'Space Grotesk', sans-serif; letter-spacing: .02em;
+}
+.botao-redondo.com-iniciais.ativo { background: var(--verde); }
+
+/* Semáforo da rota: caixa escura com borda branca, vermelho aceso com
+   halo, pestanas sobre as luzes. A sombra no div (drop-shadow) funciona em
+   todo navegador; o desfoque do halo é um extra onde houver suporte. */
+.marcador-sinal { background: none; border: 0; }
+.sinal-rota { filter: drop-shadow(0 1.5px 1.6px rgba(0, 0, 0, .38)); }
+.sinal-rota svg { display: block; overflow: visible; }
+.sinal-ponta { fill: #16191D; }
+.sinal-caixa { fill: #262B31; stroke: #fff; stroke-width: 1.7; }
+.sinal-halo { fill: #FF3B3B; opacity: .45; filter: blur(1.6px); }
+.sinal-vermelho { fill: #FF3D3D; }
+.sinal-amarelo { fill: #4E421F; }
+.sinal-verde { fill: #1B4430; }
+.sinal-viseira { fill: none; stroke: #0B0D10; stroke-width: 1.3; stroke-linecap: round; }
+.sinal-reflexo { fill: #fff; opacity: .85; }
+/* No escuro a ponta escura sumiria no fundo. */
+:root[data-tema="escuro"] .sinal-ponta { fill: #E8ECEF; }

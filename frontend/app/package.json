@@ -1,0 +1,28 @@
+{
+  "name": "truecompass-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4180",
+    "tipos": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "0.1.4",
+    "framer-motion": "^11.18.2",
+    "leaflet": "^1.9.4",
+    "maplibre-gl": "6.16.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.14",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.21"
+  }
+}

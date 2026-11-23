@@ -1,0 +1,40 @@
+// TrueCompass - mapa do centro (exemplo editavel)
+// A avenida  S semaforo  . rua  > < ^ v mao unica  # intransponivel
+// A coluna 20 e um rio, com pontes nas linhas 6 e 29 (contadas de baixo).
+// O bloco intransponivel a sudoeste e um parque.
+SAAAAASAAAAASAAAAASA#AAASAAAAASAAAAS
+A<<<<<A<<<<<A<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A>>>>>A>>>>>A>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAASAAAAASAAAAASA#AAASAAAAASAAAAS
+A^vv^^#######^vv^^Av^^vvA^vv^^Av^^vA
+A>>>>>#######>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^#######^vv^^Av#^vvA^vv^^Av^^vA
+A<<<<<#######<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^#######^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAA#######AAAAASA#AAASAAAAASAAAAS
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A<<<<<A<<<<<A<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A>>>>>A>>>>>A>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAASAAAAASAAAAASA#AAASAAAAASAAAAS
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A>>>>>A>>>>>A>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A<<<<<A<<<<<A<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAASAAAAASAAAAASA#AAASAAAAASAAAAS
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A<<<<<A<<<<<A<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A>>>>>A>>>>>A>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAASAAAAASAAAAASAAAAASAAAAASAAAAS
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A>>>>>A>>>>>A>>>>>A>#>>>A>>>>>A>>>>A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+A<<<<<A<<<<<A<<<<<A<#<<<A<<<<<A<<<<A
+A^vv^^Av^^vvA^vv^^Av#^vvA^vv^^Av^^vA
+SAAAAASAAAAASAAAAASA#AAASAAAAASAAAAS

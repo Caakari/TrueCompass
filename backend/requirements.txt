@@ -1,0 +1,5 @@
+# As dependencias do backend estao no requirements.txt da RAIZ (veja o
+# comentario la: o Railpack so enxerga aquele arquivo na hora do pip).
+# O pip resolve este caminho em relacao a ESTE arquivo, entao
+# `pip install -r backend/requirements.txt` funciona de qualquer pasta.
+-r ../requirements.txt

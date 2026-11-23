@@ -85,6 +85,19 @@ Aqui neste README, o papo é só sobre **o que o app faz e como ele parece pra q
 
 ---
 
+## 🗂️ Como o projeto está organizado
+
+```
+📱 frontend/     o app que você usa (React + TypeScript)
+⚙️ backend/      o servidor: corridas, motoristas, pagamentos
+🧮 matematica/   o cérebro: grafos, A*, quadtree e o mapa em matriz
+📄 docs/         documentação técnica e material da disciplina
+```
+
+Quer rodar? Veja `COMO_RODAR.md`. Quer achar um arquivo? Veja `INDICE.md`. 🧭
+
+---
+
 ## 🚦 Status do projeto
 
 ```

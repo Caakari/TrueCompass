@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.db
+.env
+.env.*
+!.env.exemplo
+!.env.example
+!frontend/web/.env.example
+
+# Extratos crus da Overpass (um por bloco): grandes e reproduziveis pelo CLI.
+backend/dados/osm_bruto.json
+backend/dados/osm_bruto/
+# Artefato antigo, sem contracao (versao 1): substituido por malha.json.gz.
+# Se existir localmente, serve de oraculo em matematica/tests/test_contracao.py.
+backend/dados/malha.json
+
+# Marcos do ALT: 30 MB DERIVADOS de backend/dados/malha.json em ~12s. Commitar
+# deixaria o peso em todo clone, para sempre. Gere com `python3 -m infra.preparar_alt`
+# (de dentro de backend/); o artefato traz impressao digital e e recusado se
+# ficar desatualizado.
+backend/dados/alt.bin
+
+# O artefato da malha É versionado de proposito: o deploy no Railway precisa
+# dele no boot, e gerá-lo exigiria bater na Overpass durante o build.
+# Comprimido (.gz) e com os nos de passagem contraidos.
+!backend/dados/malha.json.gz
+
+# prévia do banner: artefato derivado, sai de `gerar_banner.py --previa`
+docs/banner/previa_banner.png

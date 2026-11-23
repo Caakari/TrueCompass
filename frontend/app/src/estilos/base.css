@@ -1,0 +1,226 @@
+/* ============================================================================
+   TrueCompass — base do sistema visual
+
+   Paleta de INSTRUMENTO: aço escovado (cinzas), agulha norte (vermelho),
+   pátina e vegetação (verde). A referência é uma bússola de campo.
+
+   App MOBILE de verdade: o mapa ocupa a tela inteira (100dvh, com entalhe e
+   barra de gestos respeitados via safe-area) e o conteúdo sobe de baixo. Em
+   tela larga a folha vira painel lateral — o mesmo app, com mais espaço.
+
+   As animações representam algo real: a onda é a busca do A*, o cometa
+   percorre a rota calculada, o radar é o pareamento, a agulha é o rumo.
+   ========================================================================= */
+
+:root {
+  --bg: #0D0F11;
+  --painel: #14171A;
+  --cartao: #1A1E22;
+  --cartao-alto: #22272C;
+  --linha: #2B3136;
+  --linha-forte: #3B434A;
+
+  --texto: #EEECE7;
+  --texto-dim: #A2A9AF;
+  --texto-fraco: #6A7279;
+
+  --vermelho: #E5545E;
+  --vermelho-claro: #F4949B;
+  --vermelho-dim: rgba(229, 84, 94, .14);
+
+  --verde: #62B077;
+  --verde-claro: #9AD3A8;
+  --verde-dim: rgba(98, 176, 119, .15);
+  --verde-brilho: rgba(98, 176, 119, .55);
+  --verde-sobre: #08130B;
+  --latao: #C29A5B;
+
+  --mapa-bg: #15181B;
+  --mapa-rua: #6B7680;
+  --rota: #62B077;
+  --rota-contorno: #0B2414;
+  --onda-a-estrela: #62B077;
+  --onda-dijkstra: #C29A5B;
+  --cometa: #F6F3E8;
+  --cidade-rua: rgba(150, 162, 172, .22);
+
+  --vidro: rgba(20, 23, 26, .72);
+  --sombra: 0 22px 60px -20px rgba(0, 0, 0, .8);
+  --sombra-suave: 0 6px 20px -8px rgba(0, 0, 0, .6);
+
+  --curva: cubic-bezier(.16, 1, .3, 1);
+  --curva-suave: cubic-bezier(.4, 0, .2, 1);
+  --seguro-topo: env(safe-area-inset-top, 0px);
+  --seguro-base: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+
+:root[data-tema="claro"] {
+  --bg: #F3F3F0;
+  --painel: #FFFFFF;
+  --cartao: #FFFFFF;
+  --cartao-alto: #F0F0EC;
+  --linha: #E2E2DC;
+  --linha-forte: #C8C8C0;
+
+  --texto: #16181A;
+  --texto-dim: #575E64;
+  --texto-fraco: #8C929A;
+
+  --vermelho: #C5303E;
+  --vermelho-claro: #8E1C27;
+  --vermelho-dim: rgba(197, 48, 62, .1);
+
+  --verde: #2F8A4C;
+  --verde-claro: #23633A;
+  --verde-dim: rgba(47, 138, 76, .12);
+  --verde-brilho: rgba(47, 138, 76, .45);
+  --verde-sobre: #FFFFFF;
+  --latao: #8F6E38;
+
+  --mapa-bg: #ECEBE6;
+  --mapa-rua: #8A929A;
+  --rota: #2F8A4C;
+  --rota-contorno: #FFFFFF;
+  --onda-a-estrela: #2F8A4C;
+  --onda-dijkstra: #B07A2A;
+  --cometa: #FFFFFF;
+  --cidade-rua: rgba(70, 80, 90, .2);
+
+  --vidro: rgba(255, 255, 255, .8);
+  --sombra: 0 22px 50px -22px rgba(22, 24, 26, .35);
+  --sombra-suave: 0 6px 18px -8px rgba(22, 24, 26, .2);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body, #raiz { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--texto);
+  font: 15px/1.4 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none; overflow: hidden;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+input { font: inherit; }
+.mono { font-family: 'IBM Plex Mono', monospace; }
+
+.aplicativo { position: fixed; inset: 0; height: 100dvh; overflow: hidden; background: var(--bg); }
+.tela { position: absolute; inset: 0; }
+
+/* Troca de tema: o tema novo se expande em círculo (ver alternarTema). */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+/* ============================================================ keyframes */
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes pulsar { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes onda { from { transform: scale(0); opacity: .38; } to { transform: scale(1); opacity: 0; } }
+@keyframes brilhoEsqueleto { from { background-position: -320px 0; } to { background-position: 320px 0; } }
+@keyframes feixe { 0%, 55% { transform: translateX(-120%) skewX(-20deg); } 100% { transform: translateX(260%) skewX(-20deg); } }
+@keyframes anel { 0% { transform: scale(.5); opacity: .7; } 100% { transform: scale(2.1); opacity: 0; } }
+@keyframes indeterminada { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+@keyframes pontinho { 0%, 80%, 100% { transform: translateY(0); opacity: .35; } 40% { transform: translateY(-5px); opacity: 1; } }
+@keyframes luzTrilho { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+
+/* ============================================================== bússola */
+.bussola-palco { position: relative; transform-style: preserve-3d; perspective: 600px; flex-shrink: 0; }
+.bussola { display: block; overflow: visible; filter: drop-shadow(0 10px 18px rgba(0,0,0,.35)); }
+.bussola-aro { stroke: var(--linha-forte); stroke-width: 2; }
+.bussola-aro-interno { fill: none; stroke: var(--linha); stroke-width: 1; }
+.bussola-marca { stroke: var(--texto-fraco); stroke-width: 1; }
+.bussola-marca-cardeal { stroke: var(--texto-dim); stroke-width: 1.6; }
+.bussola-letra { fill: var(--texto-fraco); font: 700 9px 'Space Grotesk', sans-serif; text-anchor: middle; }
+.bussola-letra.norte { fill: var(--vermelho); }
+.bussola-agulha-n { fill: var(--vermelho); filter: drop-shadow(0 0 3px rgba(229, 84, 94, .6)); }
+.bussola-agulha-s { fill: var(--linha-forte); }
+.bussola-centro { fill: var(--latao); }
+.bussola-reflexo { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay; }
+
+/* ================================================================ botões */
+.botao {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 56px; padding: 0 22px; border-radius: 16px; border: 0;
+  font-size: 16px; font-weight: 700; letter-spacing: .1px;
+  transition: background .25s, opacity .25s, color .25s, box-shadow .25s;
+}
+.botao.cheio { width: 100%; }
+.botao.primario {
+  background: linear-gradient(135deg, var(--verde), color-mix(in srgb, var(--verde) 70%, #000));
+  color: var(--verde-sobre); box-shadow: 0 14px 30px -14px var(--verde-brilho);
+}
+.botao.secundario { background: var(--cartao-alto); color: var(--texto); }
+.botao.fantasma { background: transparent; color: var(--texto-dim); }
+.botao.perigo { background: transparent; color: var(--vermelho); min-height: 48px; }
+.botao:disabled { opacity: .42; box-shadow: none; }
+.botao.carregando { opacity: 1; }
+.botao.carregando .botao-rotulo { visibility: hidden; }
+.botao.carregando .giro { position: absolute; }
+.botao-rotulo { display: inline-flex; align-items: center; gap: 9px; position: relative; z-index: 1; }
+.onda { position: absolute; border-radius: 50%; background: currentColor; pointer-events: none; z-index: 0; animation: onda .7s var(--curva) forwards; }
+.brilho {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 40%; z-index: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: feixe 3.6s var(--curva-suave) infinite;
+}
+.botao-icone {
+  width: 42px; height: 42px; border-radius: 50%; border: 0; background: none;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.botao-icone:active { background: var(--cartao-alto); }
+
+/* ============================================================== diversos */
+.giro {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  border: 2.5px solid currentColor; border-right-color: transparent;
+  animation: girar .7s linear infinite;
+}
+.giro.pequeno { width: 16px; height: 16px; border-width: 2px; color: var(--verde); }
+.esqueleto {
+  display: block;
+  background: linear-gradient(90deg, var(--cartao-alto) 0, var(--linha-forte) 50%, var(--cartao-alto) 100%);
+  background-size: 640px 100%; animation: brilhoEsqueleto 1.2s linear infinite;
+}
+.reticencias { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: middle; }
+.reticencias span { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: pontinho 1.1s infinite; }
+.reticencias span:nth-child(2) { animation-delay: .15s; }
+.reticencias span:nth-child(3) { animation-delay: .3s; }
+.ponto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.ponto.pulsando { animation: pulsar 1.4s infinite; }
+
+/* Odômetro: cada dígito é uma janela de 1em com uma coluna 0–9 dentro. */
+.odometro { display: inline-flex; align-items: baseline; font-variant-numeric: tabular-nums; }
+.odometro-janela { display: inline-block; height: 1.15em; overflow: hidden; line-height: 1.15em; vertical-align: bottom;
+  -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent); }
+.odometro-coluna { display: flex; flex-direction: column; }
+.odometro-coluna span { height: 1.15em; display: block; }
+.odometro-fixo { white-space: pre; }
+
+.texto-revelado .palavra { display: inline-block; white-space: nowrap; }
+.texto-revelado .letra { display: inline-block; will-change: transform, filter; }
+
+.aviso {
+  display: flex; gap: 10px; align-items: flex-start; overflow: hidden;
+  padding: 11px 13px; border-radius: 13px; font-size: 13px; line-height: 1.45;
+  background: var(--cartao-alto); color: var(--texto-dim);
+}
+.aviso svg { flex-shrink: 0; margin-top: 1px; }
+.aviso.erro { background: var(--vermelho-dim); color: var(--vermelho-claro); }
+:root[data-tema="claro"] .aviso.erro { color: var(--vermelho); }
+.aviso.ok { background: var(--verde-dim); color: var(--verde); }
+
+.confete { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
+
+/* Íris: o login se fecha num círculo a partir do botão tocado. */
+.iris { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: grid; place-items: center; }
+.iris-bussola { opacity: .9; }
+
+.tela-carregando {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 22px; color: var(--texto-dim); font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
