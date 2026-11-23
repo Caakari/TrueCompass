@@ -270,6 +270,18 @@ def test_sair_encerra_a_sessao_do_aparelho():
     assert cliente.post("/auth/renovar", json={"renovacao": renovacao}).status_code == 401
 
 
+# ------------------------------------------------------------------ recursos
+
+def test_recursos_dizem_o_que_esta_configurado():
+    """O app esconde "Esqueci minha senha" e "Continuar com Google" quando o
+    servidor não tem e-mail ou client id: botão que só dá erro, na frente da
+    banca, é pior que botão nenhum."""
+    with configurado(email_modo="log", google_client_id=""):
+        assert cliente.get("/auth/recursos").json() == {"email": False, "confirmar_email": False, "google": False}
+    with configurado(email_modo="brevo", confirmar_email=True, google_client_id="id.apps.googleusercontent.com"):
+        assert cliente.get("/auth/recursos").json() == {"email": True, "confirmar_email": True, "google": True}
+
+
 # --------------------------------------------------------------- e-mail (Brevo)
 
 class _RespostaFalsa:

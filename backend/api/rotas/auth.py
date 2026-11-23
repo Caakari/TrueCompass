@@ -72,6 +72,21 @@ def _por_email(sessao, email):
     return sessao.query(Usuario).filter_by(email=email.lower()).one_or_none()
 
 
+# ------------------------------------------------------------------ recursos
+
+@rotas.get("/recursos")
+def recursos():
+    """O que está configurado neste servidor, para o app não mostrar botão que
+    não funciona: sem e-mail, "Esqueci minha senha" não enviaria código; sem
+    client id, "Continuar com Google" só daria erro. Público e sem segredo."""
+    config = obter_config()
+    return {
+        "email": config.email_modo in ("brevo", "resend", "smtp", "memoria"),
+        "confirmar_email": config.confirmar_email,
+        "google": bool(config.google_client_id),
+    }
+
+
 # ------------------------------------------------------------------- cadastro
 
 @rotas.post("/registro", response_model=TokenSaida | PendenteSaida,

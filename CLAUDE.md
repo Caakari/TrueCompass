@@ -119,7 +119,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
 - `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (7), `test_auth.py` (24)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (7), `test_auth.py` (25)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -268,6 +268,11 @@ Conta e login (`api/rotas/auth.py`, `dominio/servicos/conta.py`, `dominio/limita
   outro site entraria aqui (confused deputy). E-mail já cadastrado é LIGADO à
   conta existente (o Google confirmou o e-mail). Motorista pelo Google entra sem
   placa e não fica online até cadastrá-la (409).
+- `/auth/recursos` diz o que está configurado (e-mail, Google). O login
+  ESCONDE "Esqueci minha senha" sem e-mail e "Continuar com Google" sem client
+  id (precisa de `GOOGLE_CLIENT_ID` no servidor E `VITE_GOOGLE_CLIENT_ID` no app):
+  botão que só dá erro, na frente da banca, é pior que botão nenhum. Até a
+  resposta chegar — ou se falhar — nada opcional aparece.
 - **Nenhum `layoutId` na tela de login.** O destaque das abas e o check do
   perfil com layoutId, depois de trocar de aba e entrar, deixavam a tela de
   login montada e invisível por trás do mapa (o fundo animado gastando bateria)

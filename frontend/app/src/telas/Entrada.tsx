@@ -176,6 +176,9 @@ function BotaoGoogle({ texto, onClick, carregando }: { texto: string; onClick: (
 type Etapa = 'entrar' | 'registrar' | 'confirmar' | 'recuperar' | 'redefinir'
 
 const MARCA = [...'TrueCompass']
+// O botão do Google precisa do client id nos DOIS lados: aqui (para abrir a
+// janela do Google) e no servidor (para conferir o token).
+const GOOGLE_NO_APP = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID)
 const REENVIO_S = 60
 
 function relogio(segundos: number) {
@@ -208,6 +211,15 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
   const [aviso, definirAviso] = useState<string | null>(null)
   const [enviando, definirEnviando] = useState(false)
   const [comGoogle, definirComGoogle] = useState(false)
+  // O que o servidor tem configurado. Até a resposta chegar (ou se falhar),
+  // nada opcional aparece: melhor esconder que mostrar um botão que só dá erro.
+  const [recursos, definirRecursos] = useState({ email: false, google: false })
+  useEffect(() => {
+    let vivo = true
+    api.recursosAuth().then((r) => { if (vivo) definirRecursos({ email: r.email, google: r.google && GOOGLE_NO_APP }) })
+      .catch(() => { /* servidor fora: segue só com e-mail e senha */ })
+    return () => { vivo = false }
+  }, [])
   const [contagemBloqueio, definirBloqueio] = useContagem()
   // O bloqueio vale para a etapa que o causou: o login bloqueado não pode
   // travar o "Esqueci minha senha", que é justamente a saída.
@@ -407,9 +419,13 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
                   )}
                 </AnimatePresence>
 
-                <BotaoGoogle texto={registrando ? 'Criar conta com Google' : 'Continuar com Google'}
-                             onClick={google} carregando={comGoogle} />
-                <div className="divisor"><span>ou com e-mail</span></div>
+                {recursos.google && (
+                  <>
+                    <BotaoGoogle texto={registrando ? 'Criar conta com Google' : 'Continuar com Google'}
+                                 onClick={google} carregando={comGoogle} />
+                    <div className="divisor"><span>ou com e-mail</span></div>
+                  </>
+                )}
 
                 <AnimatePresence initial={false}>
                   {registrando && (
@@ -436,7 +452,7 @@ export function Entrada({ centro, falhaBackend, aoEntrar }:
                     <span className="manter-caixa"><Icone nome="check" tamanho={12} traco={3.4} /></span>
                     Manter conectado
                   </label>
-                  {!registrando && (
+                  {!registrando && recursos.email && (
                     <button type="button" className="link" onClick={() => irPara('recuperar')}>Esqueci minha senha</button>
                   )}
                 </div>

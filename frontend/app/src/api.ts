@@ -107,6 +107,7 @@ export const api = {
   redefinirSenha: (email: string, codigo: string, senha: string, manterConectado = true) =>
     pedir<Sessao>('/auth/redefinir-senha', { metodo: 'POST', corpo: { email, codigo, senha, manter_conectado: manterConectado } }),
   sair: (renovacao: string) => pedir<null>('/auth/sair', { metodo: 'POST', corpo: { renovacao } }),
+  recursosAuth: () => pedir<{ email: boolean; confirmar_email: boolean; google: boolean }>('/auth/recursos'),
   renovarSessao: (renovacao: string) =>
     pedir<Sessao>('/auth/renovar', { metodo: 'POST', corpo: { renovacao } }),
 
