@@ -126,11 +126,11 @@ matriz, suba com `MALHA_ARQUIVO=` (vazio). O grafo é derivado dela no boot.
 | `geocodificacao.py` | busca de lugares, com cache e limite de taxa |
 | `modelos.py` · `banco.py` | tabelas SQLAlchemy e sessão |
 | `seguranca.py` | bcrypt e JWT |
-| `email.py` | envio do código de 6 dígitos: Resend, SMTP, log ou memória (testes) |
+| `email.py` | envio do código de 6 dígitos: Brevo, Resend, SMTP, log ou memória (testes) |
 | `google.py` | confere no Google o token do "Continuar com Google" (audiência = nosso client id) |
 | `config.py` | configuração via ambiente (caminhos relativos partem de `backend/`) |
 
-## Testes — 281, sem pytest
+## Testes — 285, sem pytest
 
 ```bash
 for t in algoritmos quadtree matriz alt contracao; do python3 matematica/tests/test_$t.py; done
@@ -149,7 +149,7 @@ for t in osm estados migracoes api ws auth; do python3 backend/tests/test_$t.py;
 | `backend/tests/test_api.py` | 83 | ciclo via HTTP, auth, concorrência, malha, prévia, categorias, lugares, resumo do motorista, CORS, perfil, locais salvos, pagamento, histórico, avaliações, paradas, chat, link público, oferta e aceite |
 | `backend/tests/test_migracoes.py` | 7 | migração aditiva contra o esquema antigo, índice único, idempotência, recusa de NOT NULL, conta antiga segue entrando |
 | `backend/tests/test_ws.py` | 16 | tempo real, isolamento entre corridas, laço que expira ofertas |
-| `backend/tests/test_auth.py` | 20 | senha forte, código por e-mail, bloqueio por tentativas, recuperar senha, sessão renovável com detecção de reuso, Google |
+| `backend/tests/test_auth.py` | 24 | senha forte, código por e-mail (envio pelo Brevo), bloqueio por tentativas, recuperar senha, sessão renovável com detecção de reuso, Google |
 
 `frontend/web/e2e/fluxo.py` (Playwright) ainda usa a interface do front antigo.
 

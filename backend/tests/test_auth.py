@@ -270,6 +270,82 @@ def test_sair_encerra_a_sessao_do_aparelho():
     assert cliente.post("/auth/renovar", json={"renovacao": renovacao}).status_code == 401
 
 
+# --------------------------------------------------------------- e-mail (Brevo)
+
+class _RespostaFalsa:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def read(self):
+        return b'{"messageId":"<1@brevo>"}'
+
+
+def test_brevo_monta_a_requisicao_certa_sem_enviar_nada():
+    import json as _json
+    import urllib.request as _req
+    enviadas, original = [], _req.urlopen
+    _req.urlopen = lambda requisicao, timeout=None: enviadas.append(requisicao) or _RespostaFalsa()
+    try:
+        with configurado(email_modo="brevo", brevo_chave="xkeysib-teste",
+                         email_remetente="TrueCompass <truecompass.app@gmail.com>"):
+            correio.enviar_codigo("ana@usjt.br", "Ana Souza", "123456", "recuperar")
+    finally:
+        _req.urlopen = original
+    assert len(enviadas) == 1
+    req = enviadas[0]
+    assert req.full_url == "https://api.brevo.com/v3/smtp/email"
+    assert req.get_header("Api-key") == "xkeysib-teste"
+    corpo = _json.loads(req.data)
+    assert corpo["sender"] == {"name": "TrueCompass", "email": "truecompass.app@gmail.com"}
+    assert corpo["to"] == [{"email": "ana@usjt.br"}]
+    assert "123456" in corpo["subject"] and "123456" in corpo["htmlContent"]
+
+
+def test_recusa_do_brevo_vira_log_e_nao_derruba_nada():
+    import io as _io
+    import urllib.error as _erro
+    import urllib.request as _req
+
+    def recusa(requisicao, timeout=None):
+        raise _erro.HTTPError(requisicao.full_url, 401, "Unauthorized", {},
+                              _io.BytesIO(b'{"message":"unrecognised IP address"}'))
+
+    original = _req.urlopen
+    _req.urlopen = recusa
+    try:
+        with configurado(email_modo="brevo", brevo_chave="xkeysib-teste"):
+            correio.enviar_codigo("ana@usjt.br", "Ana", "123456", "confirmar")   # nao levanta
+    finally:
+        _req.urlopen = original
+
+
+def test_chave_do_brevo_escolhe_o_modo_e_liga_a_confirmacao():
+    from infra.config import Config
+    antes = {k: os.environ.get(k) for k in ("EMAIL_MODO", "BREVO_API_KEY", "CONFIRMAR_EMAIL")}
+    os.environ.pop("EMAIL_MODO", None)
+    os.environ.pop("CONFIRMAR_EMAIL", None)
+    os.environ["BREVO_API_KEY"] = "xkeysib-teste"
+    try:
+        config = Config()
+        assert config.email_modo == "brevo" and config.confirmar_email is True
+        os.environ["CONFIRMAR_EMAIL"] = "0"
+        assert Config().confirmar_email is False, "CONFIRMAR_EMAIL=0 segura a confirmacao"
+    finally:
+        for chave, valor in antes.items():
+            if valor is None:
+                os.environ.pop(chave, None)
+            else:
+                os.environ[chave] = valor
+
+
+def test_remetente_com_ou_sem_nome():
+    assert correio.separar_remetente("TrueCompass <app@gmail.com>") == ("TrueCompass", "app@gmail.com")
+    assert correio.separar_remetente("app@gmail.com") == ("TrueCompass", "app@gmail.com")
+
+
 # ------------------------------------------------------------------ google
 
 @contextmanager

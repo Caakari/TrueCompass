@@ -151,7 +151,13 @@ hora e o "Continuar com Google" avisa que não está configurado. Em
 desenvolvimento, `EMAIL_MODO=log CONFIRMAR_EMAIL=1` liga a confirmação e
 escreve o código no log do servidor.
 
-- **E-mail (código de 6 dígitos):** defina `RESEND_API_KEY` no Railway (conta
+- **E-mail (código de 6 dígitos), recomendado:** Brevo. Crie a conta em brevo.com,
+  confirme o e-mail remetente em *Senders* e gere a chave em *SMTP & API → API Keys*.
+  No Railway: `BREVO_API_KEY` e `EMAIL_REMETENTE=TrueCompass <seu-remetente@gmail.com>`.
+  Não exige domínio próprio e envia por API (funciona onde o SMTP é bloqueado).
+  Em *Security → Authorised IPs*, desative o bloqueio por IP: o Railway muda de IP
+  e a Brevo recusaria o envio ("unrecognised IP address" no log).
+- **E-mail, alternativa:** defina `RESEND_API_KEY` no Railway (conta
   grátis em resend.com, até 100 e-mails/dia). Sem domínio próprio verificado na
   Resend, ela só entrega no e-mail do dono da conta — para testar basta; para
   todo mundo, verifique um domínio e ajuste `EMAIL_REMETENTE`. Com e-mail

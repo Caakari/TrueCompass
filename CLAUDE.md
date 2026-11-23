@@ -119,7 +119,7 @@ Camada HTTP em `backend/api/` (FastAPI):
 - `eventos.py` — mensagens do WS e `comitar_e_publicar`
 - `rotas/usuarios.py` — perfil (`/usuarios/eu`) e locais salvos (`/usuarios/eu/locais`)
 - `rotas/publico.py` — acompanhamento sem login pelo link compartilhado (`/publico/acompanhar/{token}`)
-- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (7), `test_auth.py` (20)
+- `backend/tests/`: `test_estados.py` (18), `test_api.py` (83), `test_ws.py` (16), `test_migracoes.py` (7), `test_auth.py` (24)
 - `matematica/tests/`: `test_matriz.py` (29) — matriz e semáforos; `test_quadtree.py` (23); `test_alt.py` (23); `test_contracao.py` (14)
 
 Front-end ATUAL em `frontend/app/` (React + TypeScript + Vite, porta 5180) — ver `frontend/app/README.md`:
@@ -239,7 +239,10 @@ Conta e login (`api/rotas/auth.py`, `dominio/servicos/conta.py`, `dominio/limita
 - Código de 6 dígitos por e-mail (confirmar conta, recuperar senha): guardado
   como **HMAC** com o segredo do JWT (10⁶ códigos quebrariam um SHA puro), vale
   15 min, morre em 5 erros, e um código novo invalida o anterior.
-- Confirmação no cadastro **só liga com e-mail configurado** (Resend ou SMTP):
+- E-mail: **Brevo** (API HTTP, sem domínio próprio — só confirmar o remetente),
+  Resend ou SMTP, escolhido pela chave presente. Falha de envio vira log com o
+  CORPO da resposta (motivo legível), nunca derruba a requisição.
+- Confirmação no cadastro **só liga com e-mail configurado** (Brevo, Resend ou SMTP):
   com `EMAIL_MODO=log` ninguém receberia o código. `email_confirmado` NULL
   (conta antiga) conta como confirmado; só `False` barra o login (403
   `email_nao_confirmado`, e o app vai para a tela do código).

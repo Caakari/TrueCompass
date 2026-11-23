@@ -3,6 +3,8 @@
 
 Modos (EMAIL_MODO, ou escolhido sozinho pelo que estiver configurado):
 
+- brevo   -- API HTTP da Brevo (BREVO_API_KEY). Gratis ate 300/dia e sem
+             dominio proprio: basta confirmar o e-mail remetente na Brevo.
 - resend  -- API HTTP da Resend (RESEND_API_KEY). Gratis ate 100/dia. Sem
              dominio proprio verificado, so envia para o e-mail do dono da
              conta Resend; com dominio, para qualquer um.
@@ -17,8 +19,10 @@ e-mail sair, e o tempo de resposta nao revela se o e-mail existe.
 
 import json
 import logging
+import re
 import smtplib
 import ssl
+import urllib.error
 import urllib.request
 from email.message import EmailMessage
 
@@ -70,6 +74,27 @@ def _por_resend(config, msg):
         resposta.read()
 
 
+def separar_remetente(texto):
+    """ "TrueCompass <app@gmail.com>" -> ("TrueCompass", "app@gmail.com")."""
+    achado = re.match(r"\s*(.*?)\s*<\s*([^>]+?)\s*>\s*$", texto or "")
+    if achado:
+        return achado.group(1).strip('"') or "TrueCompass", achado.group(2)
+    return "TrueCompass", (texto or "").strip()
+
+
+def _por_brevo(config, msg):
+    nome, email = separar_remetente(config.email_remetente)
+    corpo = json.dumps({"sender": {"name": nome, "email": email}, "to": [{"email": msg["para"]}],
+                        "subject": msg["assunto"], "textContent": msg["texto"],
+                        "htmlContent": msg["html"]})
+    requisicao = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email", data=corpo.encode(), method="POST",
+        headers={"api-key": config.brevo_chave, "Content-Type": "application/json",
+                 "Accept": "application/json", "User-Agent": "TrueCompass/1.0"})
+    with urllib.request.urlopen(requisicao, timeout=10) as resposta:
+        resposta.read()
+
+
 def _por_smtp(config, msg):
     mensagem = EmailMessage()
     mensagem["From"] = config.email_remetente
@@ -97,6 +122,8 @@ def enviar_codigo(destino, nome, codigo, finalidade):
     try:
         if config.email_modo == "memoria":
             ENVIADOS.append(msg)
+        elif config.email_modo == "brevo":
+            _por_brevo(config, msg)
         elif config.email_modo == "resend":
             _por_resend(config, msg)
         elif config.email_modo == "smtp":
@@ -106,5 +133,11 @@ def enviar_codigo(destino, nome, codigo, finalidade):
                                 finalidade, _mascarar(destino), codigo)
             return
         registrador.info("codigo de %s enviado para %s", finalidade, _mascarar(destino))
+    except urllib.error.HTTPError as erro:
+        # O corpo da resposta diz o motivo (chave errada, remetente nao
+        # confirmado, IP nao autorizado...): sem ele o log seria so "401".
+        detalhe = erro.read().decode("utf-8", "replace")[:300]
+        registrador.error("falha ao enviar codigo para %s: HTTP %s %s",
+                          _mascarar(destino), erro.code, detalhe)
     except Exception as erro:                       # noqa: BLE001 -- segundo plano
         registrador.error("falha ao enviar codigo para %s: %s", _mascarar(destino), erro)

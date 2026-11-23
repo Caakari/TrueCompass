@@ -84,16 +84,19 @@ class Config:
         # para o log do servidor) ou memoria (testes). Sem escolha explicita,
         # decide pelo que estiver configurado.
         self.resend_chave = os.getenv("RESEND_API_KEY", "")
+        # Brevo: API HTTP, sem domínio próprio (basta confirmar o e-mail remetente).
+        self.brevo_chave = os.getenv("BREVO_API_KEY", "")
         self.smtp_host = os.getenv("SMTP_HOST", "")
         self.smtp_porta = int(os.getenv("SMTP_PORTA", "587"))
         self.smtp_usuario = os.getenv("SMTP_USUARIO", "")
         self.smtp_senha = os.getenv("SMTP_SENHA", "")
         self.email_remetente = os.getenv("EMAIL_REMETENTE", "TrueCompass <onboarding@resend.dev>")
         self.email_modo = os.getenv("EMAIL_MODO", "") or (
-            "resend" if self.resend_chave else "smtp" if self.smtp_host else "log")
+            "brevo" if self.brevo_chave else "resend" if self.resend_chave
+            else "smtp" if self.smtp_host else "log")
         # Confirmar o e-mail no cadastro so faz sentido se o codigo CHEGA a
         # pessoa: com o modo "log" ninguem conseguiria se cadastrar.
-        padrao_confirmar = "1" if self.email_modo in ("resend", "smtp") else "0"
+        padrao_confirmar = "1" if self.email_modo in ("brevo", "resend", "smtp") else "0"
         self.confirmar_email = os.getenv("CONFIRMAR_EMAIL", padrao_confirmar) not in ("0", "false")
         self.google_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
         # "Manter conectado": o token de acesso dura JWT_HORAS; o de
