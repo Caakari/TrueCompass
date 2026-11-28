@@ -1,33 +1,33 @@
 # TrueCompass — instruções do projeto
 
-## Git: commitar apenas no Prototipo-TrueCompass
+## Git: os dois repositórios recebem o `main`
 
-**Commits e push são autorizados**, e apenas para este repositório:
+**Commits e push são autorizados** para estes dois repositórios, e nenhum outro:
 
-```
-https://github.com/Cm-Kauan/Prototipo-TrueCompass.git
-```
+| Remote | Repositório | Papel |
+|---|---|---|
+| `origin` | `https://github.com/Cm-Kauan/Prototipo-TrueCompass.git` | onde o trabalho acontece |
+| `Kauan` | `https://github.com/Caakari/TrueCompass.git` | repositório da squad (da Carolina Yukari) |
 
-Nenhum outro. `Caakari/TrueCompass` é o repositório antigo do squad, preservado
-somente leitura na prática — **nunca** empurre nada para lá.
+Os dois têm a mesma história desde o merge `18a10ff` (2026-11-27): o `main`
+daqui é enviado aos dois (`git push origin main` e `git push Kauan main`).
 
 ### Confira o remote antes de todo push
 
-O container reconfigura `origin` para `Caakari/TrueCompass` a cada reinício.
-Isso já aconteceu duas vezes. Antes de empurrar:
+O container já reconfigurou `origin` para `Caakari/TrueCompass` ao reiniciar.
+Antes de empurrar:
 
 ```bash
-git remote get-url origin        # tem de ser Cm-Kauan/Prototipo-TrueCompass
+git remote -v                    # origin = Cm-Kauan/Prototipo-TrueCompass, Kauan = Caakari/TrueCompass
 git remote set-url origin https://github.com/Cm-Kauan/Prototipo-TrueCompass.git
 ```
-
-Sem essa conferência, o commit vai para o repositório errado em silêncio.
 
 ### Disciplina de commit
 
 - **Rode a suíte inteira antes de commitar.** Nada de commit com teste vermelho.
-- `git fetch origin main` antes: o Kauan e o squad também empurram aqui.
-  Divergiu, faça merge — **nunca** rebase nem force-push em branch compartilhada.
+- `git fetch origin main` e `git fetch Kauan main` antes: o Kauan e o squad
+  também empurram nos dois. Divergiu, faça merge — **nunca** rebase nem
+  force-push em branch compartilhada.
 - Branch de trabalho: `main`.
 - **Não commite artefato derivado.** `backend/dados/alt.bin` sai de
   `backend/dados/malha.json.gz` em segundos e está no `.gitignore`. `malha.json.gz`
