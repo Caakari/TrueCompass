@@ -32,18 +32,20 @@ python3 matematica/tests/test_algoritmos.py   # 19 — Dijkstra, A*, pareamento 
 python3 matematica/tests/test_quadtree.py     # 23 — índice espacial
 python3 matematica/tests/test_contracao.py    # 14 — contração da malha
 python3 matematica/tests/test_matriz.py       # 29 — matriz do mapa e semáforos
+python3 matematica/tests/test_alt.py          # 23 — A* + Landmarks (ALT)
 python3 backend/tests/test_osm.py             # 29 — parser OpenStreetMap
 python3 backend/tests/test_estados.py         # 18 — Kahn e DAG da corrida
-python3 backend/tests/test_api.py             # 80 — ciclo completo via HTTP
-python3 backend/tests/test_migracoes.py       # 6 — migração aditiva do banco
+python3 backend/tests/test_api.py             # 83 — ciclo completo via HTTP
+python3 backend/tests/test_migracoes.py       # 7 — migração aditiva do banco
 python3 backend/tests/test_ws.py              # 16 — tempo real
+python3 backend/tests/test_auth.py            # 25 — senha, código por e-mail, sessão, Google
 ```
 
-Todos de uma vez:
+Todos de uma vez (286 testes):
 
 ```bash
-for t in algoritmos quadtree matriz; do python3 matematica/tests/test_$t.py; done
-for t in osm estados api ws;        do python3 backend/tests/test_$t.py; done
+for t in algoritmos quadtree matriz alt contracao; do python3 matematica/tests/test_$t.py; done
+for t in osm estados migracoes api ws auth;        do python3 backend/tests/test_$t.py; done
 ```
 
 ## Ver os algoritmos comparados

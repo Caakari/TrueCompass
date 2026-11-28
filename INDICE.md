@@ -31,7 +31,7 @@ servidor e sem rede. O backend acha a pasta `matematica/` sozinho
 | Arquivo | Para quê |
 |---|---|
 | `COMO_RODAR.md` | instalar, rodar os testes, subir o servidor e o app |
-| `README.md` | visão do produto — o que o app faz, para quem usa |
+| `README.md` | o que é o app, o objetivo, as telas e os resultados |
 | `CLAUDE.md` | decisões de projeto que valem manter (e as armadilhas) |
 | `frontend/app/README.md` | o app novo: estrutura e o que cada animação representa |
 
@@ -49,6 +49,10 @@ servidor e sem rede. O backend acha a pasta `matematica/` sozinho
 | `docs/Documentacao_App/TrueCompass_Documentacao_Tecnica.pdf` | doc original — seções 1 a 7 |
 | `docs/Documentacao_App/TrueCompass_Secao_C_Fundamentacao_Matematica.pdf` | 9 definições, 14 proposições, 5 corolários, com demonstrações |
 | `docs/Documentacao_App/TrueCompass_1a_Parcial_Relatorio_Executivo.pdf` | entrega da 1ª parcial, 8 seções |
+| `docs/Documentacao_App/Fluxograma.pdf` · `Apresentação TrueCompass.png` | fluxo do app e apresentação, feitos pela squad |
+| `docs/imagens/` | capturas do app em tamanho de tela, usadas no `README.md` |
+| `docs/banner/` | banner da Mostra A3 (`v2/` é o atual) e o gerador |
+| `docs/apresentacao/roteiro_pitch_e_demo.md` | pitch de 90 s, demonstração e perguntas da banca |
 | `docs/Documentacao_Aula/` | material da disciplina |
 
 > A Seção C **retifica** a §6 da doc original: a consulta por raio na quadtree
